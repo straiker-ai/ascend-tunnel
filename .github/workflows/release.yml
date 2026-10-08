@@ -10,12 +10,15 @@ permissions:
 jobs:
   binaries:
     runs-on: ubuntu-latest
+    # Signing keys and the package token are secrets of this environment, which only v* tags (created
+    # by admins only) may use - never repo secrets, which any branch's workflow could read.
+    environment: release
     permissions:
       contents: write     # the GitHub release
       id-token: write     # Sigstore signing of the build provenance
       attestations: write
     env:
-      # Each credential is optional: its step is skipped when it is absent.
+      # Each credential is optional (the `release` environment's secrets): its step is skipped when absent.
       PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}               # homebrew-tap, scoop-bucket, winget-pkgs fork
       MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}               # Developer ID Application, base64 .p12
       MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
