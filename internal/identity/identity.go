@@ -53,7 +53,7 @@ func Load(tenant, stateDir string) (*Identity, error) {
 }
 
 // ensureKey loads the private key at path, generating an ed25519 key there (0600) if there is none.
-// The file is OpenSSH format, the same as every earlier agent writes, so an install keeps its identity.
+// The file is OpenSSH format, so standard SSH tooling can read it.
 func ensureKey(path string) (ssh.Signer, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

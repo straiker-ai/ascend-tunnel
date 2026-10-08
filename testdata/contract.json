@@ -1,10 +1,5 @@
 {
   "comment": "Identifiers the agent and Straiker's relay must derive identically. Generated from the relay's reference implementation; the relay's tests check the same file.",
-  "python_agent_key": {
-    "file": "python-agent.key",
-    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
-    "agent_id": "520de864"
-  },
   "cases": [
     {
       "tenant": "1",

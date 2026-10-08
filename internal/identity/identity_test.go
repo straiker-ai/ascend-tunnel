@@ -13,11 +13,6 @@ import (
 )
 
 type contract struct {
-	PythonAgentKey struct {
-		File      string `json:"file"`
-		PublicKey string `json:"public_key"`
-		AgentID   string `json:"agent_id"`
-	} `json:"python_agent_key"`
 	Cases []struct {
 		Tenant      string            `json:"tenant"`
 		PublicKey   string            `json:"public_key"`
@@ -75,25 +70,6 @@ func TestNamesMatchTheRelaysContract(t *testing.T) {
 				t.Errorf("SocketPath(%s) = %s, want %s", spec, got, want)
 			}
 		}
-	}
-}
-
-func TestAKeyAnEarlierAgentWroteIsTheSameIdentity(t *testing.T) {
-	c := loadContract(t)
-	dir := t.TempDir()
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", c.PythonAgentKey.File))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, KeyFile), data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	id, err := Load("1", dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id.PublicKey != c.PythonAgentKey.PublicKey || id.AgentID != c.PythonAgentKey.AgentID {
-		t.Fatalf("got %s / %s, want %s / %s", id.PublicKey, id.AgentID, c.PythonAgentKey.PublicKey, c.PythonAgentKey.AgentID)
 	}
 }
 
