@@ -274,6 +274,14 @@ func TestTheTunnelCarriesConnectionsToTheTarget(t *testing.T) {
 	if countEvents(audit.events(t), "identity") != 1 || countEvents(audit.events(t), "forward") < 2 {
 		t.Fatalf("audit %s", audit.String())
 	}
+	for _, e := range audit.events(t) {
+		if e["event"] == "identity" {
+			urls, _ := e["app_urls"].([]any)
+			if len(urls) != 1 || urls[0] != target.AppURL() {
+				t.Fatalf("the identity line names each target's app URL: %v", e)
+			}
+		}
+	}
 }
 
 func TestAnUnlistedAgentWaitsAndIsLetInOnceListed(t *testing.T) {
@@ -451,6 +459,7 @@ func TestCheckReportsEachStep(t *testing.T) {
 		"PASS  target " + target.Addr() + " reachable",
 		"FAIL  target 127.0.0.1:",
 		identity.PasteForm(a.id.PublicKey),
+		"INFO  app URL for " + target.Addr() + ": " + target.AppURL() + "/...",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())

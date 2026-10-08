@@ -87,7 +87,7 @@ func TestABadConfigIsRefused(t *testing.T) {
 		{"bad org id", Overrides{Tenant: "a b", Relay: "wss://x/t", Allow: []string{"h:1"}}, "tenant"},
 		{"plain https relay", Overrides{Tenant: "1", Relay: "https://x/", Allow: []string{"h:1"}}, "wss://"},
 		{"no allowlist", Overrides{Tenant: "1", Relay: "wss://x/t"}, "at least one"},
-		{"no port", Overrides{Tenant: "1", Relay: "wss://x/t", Allow: []string{"h"}}, "allow[0]"},
+		{"empty port", Overrides{Tenant: "1", Relay: "wss://x/t", Allow: []string{"h:"}}, "allow[0]"},
 		{"path in host", Overrides{Tenant: "1", Relay: "wss://x/t", Allow: []string{"../../etc:443"}}, "invalid forward"},
 		{"tilde in host", Overrides{Tenant: "1", Relay: "wss://x/t", Allow: []string{"a~b:443"}}, "invalid forward"},
 		{"port out of range", Overrides{Tenant: "1", Relay: "wss://x/t", Allow: []string{"h:70000"}}, "invalid forward"},
@@ -108,6 +108,36 @@ func TestABadConfigIsRefused(t *testing.T) {
 func TestAMissingNamedFileIsAnError(t *testing.T) {
 	if _, err := Load(filepath.Join(t.TempDir(), "nope.yaml"), Overrides{Tenant: "1", Allow: []string{"h:1"}}, noEnv); err == nil {
 		t.Fatal("a config file that was named but is missing must not be ignored")
+	}
+}
+
+func TestAHostAloneMeansPort443(t *testing.T) {
+	p := writeConfig(t, "tenant: '1'\nallow:\n  - { host: a.corp }\n  - b.corp\n  - c.corp:8080\n")
+	c, err := Load(p, Overrides{}, noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Forward{{"a.corp", 443}, {"b.corp", 443}, {"c.corp", 8080}}
+	for i, f := range want {
+		if c.Forwards[i] != f {
+			t.Fatalf("forwards %v, want %v", c.Forwards, want)
+		}
+	}
+	c, err = Load("", Overrides{Tenant: "1", Allow: []string{"chat.corp.internal"}}, noEnv)
+	if err != nil || c.Forwards[0] != (Forward{"chat.corp.internal", 443}) {
+		t.Fatalf("a flag with no port: %v %v", c, err)
+	}
+}
+
+func TestTheAppURLForATarget(t *testing.T) {
+	for f, want := range map[Forward]string{
+		{"chat.corp.internal", 443}: "https://chat.corp.internal.tun.straiker.ai",
+		{"api.corp", 8443}:          "https://api.corp.tun.straiker.ai",
+		{"plain.corp", 80}:          "http://plain.corp.tun.straiker.ai",
+	} {
+		if got := f.AppURL(); got != want {
+			t.Errorf("%v: %s, want %s", f, got, want)
+		}
 	}
 }
 

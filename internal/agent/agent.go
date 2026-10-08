@@ -71,9 +71,13 @@ func New(cfg *config.Config, id *identity.Identity, audit *Audit) (*Agent, error
 // Run keeps one reconnecting link per fan-out index until ctx ends. Each link binds its own socket
 // per target, so a target's connections spread across links for throughput.
 func (a *Agent) Run(ctx context.Context) {
+	urls := make([]string, 0, len(a.cfg.Forwards))
+	for _, f := range a.cfg.Forwards {
+		urls = append(urls, f.AppURL())
+	}
 	a.audit.Log("identity", "tenant", a.id.Tenant, "agent_id", a.id.AgentID,
-		"agent_key", identity.PasteForm(a.id.PublicKey),
-		"hint", "paste agent_key into each Ascend app's _tunnel_agent_keys that this agent serves")
+		"agent_key", identity.PasteForm(a.id.PublicKey), "app_urls", urls,
+		"hint", "paste agent_key into each Ascend app's _tunnel_agent_keys; an app's URL is its target's app_url plus the app's path")
 	if a.cfg.HostKey == "" {
 		a.audit.Log("warning", "error", "the relay's host key is not pinned (set host_key)")
 	}

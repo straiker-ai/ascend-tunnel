@@ -12,7 +12,7 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 
 - **Outbound only.** The agent dials out to Straiker's relay on 443, through your proxy if you have
   one. Nothing connects in.
-- **Reaches only what you list.** Each `--allow host:port` is one fixed forward; the agent dials
+- **Reaches only what you list.** Each `--allow host[:port]` is one fixed forward; the agent dials
   nothing else, whatever it is asked.
 - **Sees only ciphertext.** TLS runs end to end from Ascend to your app; the agent splices bytes.
 - **Your key, on your machine.** The agent generates its key on first start and never sends the
@@ -55,12 +55,13 @@ signature, so compare them after removing it.
 
 ## Set up
 
-You need your **Straiker org id** and the **host:port** of the app to reach from this machine.
+You need your **Straiker org id** and the **host** of the app to reach from this machine (and its
+port, if it is not 443).
 
 1. **Check the path** - the relay through your proxy, its TLS, and your app:
 
    ```sh
-   ascend-tunnel check --org 1234 --allow chat.corp.internal:443
+   ascend-tunnel check --org 1234 --allow chat.corp.internal
    ```
 
    Every line should read `PASS`, except `WAIT` for the key (step 3). Paste the output to Straiker if
@@ -69,15 +70,22 @@ You need your **Straiker org id** and the **host:port** of the app to reach from
 2. **Run it:**
 
    ```sh
-   ascend-tunnel --org 1234 --allow chat.corp.internal:443
+   ascend-tunnel --org 1234 --allow chat.corp.internal
    ```
 
-   On first start it prints its key: `{"event":"identity", ... "agent_key":"AAAAC3NzaC1lZDI1NTE5..."}`.
-   `ascend-tunnel key` prints the same value on its own.
+   `--allow chat.corp.internal` means port 443; give `host:port` for any other. On first start the
+   agent prints its key and the URL each target is reached at:
+
+   ```
+   {"event":"identity", ... "agent_key":"AAAAC3NzaC1lZDI1NTE5...",
+    "app_urls":["https://chat.corp.internal.tun.straiker.ai"], ...}
+   ```
+
+   `ascend-tunnel key` prints the key on its own; `check` prints both.
 
 3. **Authorize it in Ascend.** In the app's request template, set `_tunnel_agent_keys` to the key
-   (a list, one entry per agent), and set the app's URL to the tunnel name of your host:
-   `https://chat.corp.internal.tun.straiker.ai/...`. Until an app lists the key the relay refuses the
+   (a list, one entry per agent), and set the app's URL to its target's app URL plus the app's path:
+   `https://chat.corp.internal.tun.straiker.ai/v1/chat`. Until an app lists the key the relay refuses the
    agent; it retries every ~5 seconds, so **Test connection** works as soon as the key is pasted.
 
 More apps on the same agent: add each host with another `--allow`, and paste the same key into each
@@ -93,7 +101,7 @@ Flags override `TUNNEL_*` environment variables, which override the config file
 | flag | environment | file | default |
 |---|---|---|---|
 | `--org` | `TUNNEL_TENANT` | `tenant` | required |
-| `--allow host:port` (repeat) | `TUNNEL_ALLOW` (comma-separated) | `allow` | required |
+| `--allow host[:port]` (repeat; port 443 if omitted) | `TUNNEL_ALLOW` (comma-separated) | `allow` | required |
 | `--env` | `TUNNEL_ENV` | `env` | `prod` |
 | `--relay` | `TUNNEL_RELAY` | `relay` | the environment's relay |
 | `--host-key` | `TUNNEL_HOST_KEY` | `host_key` | the environment's pinned key |
@@ -127,7 +135,7 @@ more agents.
   ```sh
   docker run -d --name ascend-tunnel --restart unless-stopped \
     -v ascend-tunnel:/var/lib/ascend-tunnel \
-    ghcr.io/straiker-ai/ascend-tunnel --org 1234 --allow chat.corp.internal:443
+    ghcr.io/straiker-ai/ascend-tunnel --org 1234 --allow chat.corp.internal
   ```
 
   The image is distroless and runs as uid 65532; keep the volume, it holds the key.
