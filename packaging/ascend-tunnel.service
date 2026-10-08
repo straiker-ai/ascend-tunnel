@@ -1,0 +1,32 @@
+[Unit]
+Description=Straiker Ascend tunnel agent
+Documentation=https://github.com/straiker-ai/ascend-tunnel
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Edit /etc/straiker/agent.yaml (your org id and allowlist), then: systemctl enable --now ascend-tunnel
+ExecStart=/usr/bin/ascend-tunnel run -c /etc/straiker/agent.yaml
+Environment=TUNNEL_STATE_DIR=/var/lib/ascend-tunnel
+DynamicUser=yes
+StateDirectory=ascend-tunnel
+StateDirectoryMode=0700
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+# Straiker Ascend tunnel agent. Every value can also be a flag (ascend-tunnel run -h) or a TUNNEL_*
+# environment variable; flags win, then the environment, then this file.
+
+# Your Straiker org id.
+tenant: "1234"
+
+# The targets this agent may reach - nothing else, ever. One entry per host. An Ascend app reaches a
+# target as https://<host>.tun.straiker.ai/... - use that as the app's URL.
+allow:
+  - { host: chat.corp.internal, port: 443 }
+
+# Optional. Defaults to Straiker's production relay and its pinned host key.
+# env: prod
+# relay: wss://ascendai-bridge.prod.straiker.ai/tunnel
+# host_key: "ssh-ed25519 AAAA..."
+
+# Optional: where this agent keeps its private key (generated on first start; keep it).
+# state_dir: /var/lib/ascend-tunnel
+
+# Optional: a CA to trust besides the system store, e.g. your egress proxy's inspection CA.
+# The proxy itself comes from HTTPS_PROXY.
+# ca_file: /etc/straiker/corp-proxy-ca.pem
+
+# Optional: one JSON line per connection - when, where, bytes. Default: <state_dir>/connections.jsonl
+# audit_log: /var/log/straiker/connections.jsonl
+
+# Optional: links to the relay, for more concurrent traffic (1..16).
+# fanout: 1

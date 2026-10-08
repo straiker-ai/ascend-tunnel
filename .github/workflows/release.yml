@@ -1,0 +1,97 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # the GitHub release
+      id-token: write     # Sigstore signing of the build provenance
+      attestations: write
+    env:
+      # Each credential is optional: its step is skipped when it is absent.
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}               # homebrew-tap, scoop-bucket, winget-pkgs fork
+      MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}               # Developer ID Application, base64 .p12
+      MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}           # App Store Connect API key, base64 .p8
+      JSIGN_STORETYPE: ${{ secrets.JSIGN_STORETYPE }}             # Windows Authenticode via a cloud HSM
+      JSIGN_KEYSTORE: ${{ secrets.JSIGN_KEYSTORE }}
+      JSIGN_STOREPASS: ${{ secrets.JSIGN_STOREPASS }}
+      JSIGN_ALIAS: ${{ secrets.JSIGN_ALIAS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: install jsign
+        if: env.JSIGN_STORETYPE != ''
+        run: |
+          curl -fsSLo /tmp/jsign.deb https://github.com/ebourg/jsign/releases/download/7.5/jsign_7.5_all.deb
+          echo "7b4a01ba81e9ee866f09a5e45d40c928707eb5286f4e20d4042c67a141ae5e62  /tmp/jsign.deb" | sha256sum -c -
+          sudo apt-get install -y /tmp/jsign.deb
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/checksums.txt
+
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/straiker-ai/ascend-tunnel
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/straiker-ai/ascend-tunnel
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

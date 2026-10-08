@@ -1,0 +1,132 @@
+# Release: signed, checksummed, attested binaries for every platform, plus the package-manager
+# manifests. Every publish step that needs a credential is skipped when that credential is absent,
+# so a snapshot build (`goreleaser release --snapshot --clean`) works anywhere.
+version: 2
+project_name: ascend-tunnel
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: ascend-tunnel
+    main: ./cmd/ascend-tunnel
+    binary: ascend-tunnel
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible: same commit, same bytes
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    hooks:
+      post:
+        # Authenticode-signs Windows binaries when signing is configured; a no-op otherwise.
+        - cmd: sh scripts/sign-windows.sh "{{ .Path }}"
+          output: true
+
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [ascend-tunnel]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+
+archives:
+  - id: ascend-tunnel
+    ids: [ascend-tunnel]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md, config.example.yaml]
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: packages
+    ids: [ascend-tunnel]
+    package_name: ascend-tunnel
+    vendor: Straiker
+    homepage: https://github.com/straiker-ai/ascend-tunnel
+    maintainer: Straiker <support@straiker.ai>
+    description: Outbound-only tunnel agent that lets Straiker Ascend reach AI apps in a private network.
+    license: Apache-2.0
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      - src: packaging/ascend-tunnel.service
+        dst: /usr/lib/systemd/system/ascend-tunnel.service
+      - src: config.example.yaml
+        dst: /etc/straiker/agent.yaml
+        type: config|noreplace
+        file_info:
+          mode: 0644
+
+homebrew_casks:
+  - name: ascend-tunnel
+    ids: [ascend-tunnel]
+    homepage: https://github.com/straiker-ai/ascend-tunnel
+    description: Outbound-only tunnel agent for Straiker Ascend
+    license: Apache-2.0
+    repository:
+      owner: straiker-ai
+      name: homebrew-tap
+      token: "{{ .Env.PACKAGES_TOKEN }}"
+    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+
+scoops:
+  - name: ascend-tunnel
+    ids: [ascend-tunnel]
+    homepage: https://github.com/straiker-ai/ascend-tunnel
+    description: Outbound-only tunnel agent for Straiker Ascend
+    license: Apache-2.0
+    repository:
+      owner: straiker-ai
+      name: scoop-bucket
+      token: "{{ .Env.PACKAGES_TOKEN }}"
+    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+
+winget:
+  - name: AscendTunnel
+    ids: [ascend-tunnel]
+    publisher: Straiker
+    package_identifier: Straiker.AscendTunnel
+    short_description: Outbound-only tunnel agent for Straiker Ascend
+    license: Apache-2.0
+    publisher_url: https://www.straiker.ai
+    homepage: https://github.com/straiker-ai/ascend-tunnel
+    repository:
+      owner: straiker-ai
+      name: winget-pkgs
+      branch: "ascend-tunnel-{{ .Version }}"
+      token: "{{ .Env.PACKAGES_TOKEN }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+
+release:
+  github:
+    owner: straiker-ai
+    name: ascend-tunnel
+  footer: |
+    Verify a download: `gh attestation verify <file> --repo straiker-ai/ascend-tunnel`
+    and check it against `checksums.txt`.
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^ci:", "^chore:"]

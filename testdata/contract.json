@@ -1,0 +1,114 @@
+{
+  "comment": "Identifiers the agent and Straiker's relay must derive identically. Generated from the relay's reference implementation; the relay's tests check the same file.",
+  "python_agent_key": {
+    "file": "python-agent.key",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+    "agent_id": "520de864"
+  },
+  "cases": [
+    {
+      "tenant": "1",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "agent_id": "520de864",
+      "login_slug": "410a2f689557",
+      "login_user": "t410a2f689557",
+      "socket_dir": "/run/t/410a2f689557",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/410a2f689557/chat.corp.internal~0",
+        "api.corp~15": "/run/t/410a2f689557/api.corp~15"
+      }
+    },
+    {
+      "tenant": "1",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "agent_id": "95b9aca0",
+      "login_slug": "b0bcc6d83887",
+      "login_user": "tb0bcc6d83887",
+      "socket_dir": "/run/t/b0bcc6d83887",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/b0bcc6d83887/chat.corp.internal~0",
+        "api.corp~15": "/run/t/b0bcc6d83887/api.corp~15"
+      }
+    },
+    {
+      "tenant": "1234",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "agent_id": "520de864",
+      "login_slug": "e6d2fea1d6ba",
+      "login_user": "te6d2fea1d6ba",
+      "socket_dir": "/run/t/e6d2fea1d6ba",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/e6d2fea1d6ba/chat.corp.internal~0",
+        "api.corp~15": "/run/t/e6d2fea1d6ba/api.corp~15"
+      }
+    },
+    {
+      "tenant": "1234",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "agent_id": "95b9aca0",
+      "login_slug": "1173cc7f8838",
+      "login_user": "t1173cc7f8838",
+      "socket_dir": "/run/t/1173cc7f8838",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/1173cc7f8838/chat.corp.internal~0",
+        "api.corp~15": "/run/t/1173cc7f8838/api.corp~15"
+      }
+    },
+    {
+      "tenant": "tenant-two",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "agent_id": "520de864",
+      "login_slug": "055cc8e95736",
+      "login_user": "t055cc8e95736",
+      "socket_dir": "/run/t/055cc8e95736",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/055cc8e95736/chat.corp.internal~0",
+        "api.corp~15": "/run/t/055cc8e95736/api.corp~15"
+      }
+    },
+    {
+      "tenant": "tenant-two",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "agent_id": "95b9aca0",
+      "login_slug": "537b7748c111",
+      "login_user": "t537b7748c111",
+      "socket_dir": "/run/t/537b7748c111",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/537b7748c111/chat.corp.internal~0",
+        "api.corp~15": "/run/t/537b7748c111/api.corp~15"
+      }
+    },
+    {
+      "tenant": "org_42:prod",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw",
+      "agent_id": "520de864",
+      "login_slug": "c3eaa77323b8",
+      "login_user": "tc3eaa77323b8",
+      "socket_dir": "/run/t/c3eaa77323b8",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/c3eaa77323b8/chat.corp.internal~0",
+        "api.corp~15": "/run/t/c3eaa77323b8/api.corp~15"
+      }
+    },
+    {
+      "tenant": "org_42:prod",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "paste_form": "AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+      "agent_id": "95b9aca0",
+      "login_slug": "193b76314b5b",
+      "login_user": "t193b76314b5b",
+      "socket_dir": "/run/t/193b76314b5b",
+      "socket_paths": {
+        "chat.corp.internal~0": "/run/t/193b76314b5b/chat.corp.internal~0",
+        "api.corp~15": "/run/t/193b76314b5b/api.corp~15"
+      }
+    }
+  ]
+}
