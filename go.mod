@@ -2,7 +2,7 @@ module github.com/straiker-ai/ascend-tunnel
 
 go 1.26.0
 
-toolchain go1.26.6
+toolchain go1.27.1
 
 require (
 	github.com/coder/websocket v1.8.15
