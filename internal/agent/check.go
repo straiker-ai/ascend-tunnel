@@ -27,6 +27,9 @@ func (a *Agent) Check(ctx context.Context, w io.Writer) bool {
 	}
 	line("INFO", "org %s, agent %s", a.id.Tenant, a.id.AgentID)
 	line("INFO", "agent key (paste into the app's _tunnel_agent_keys): %s", identity.PasteForm(a.id.PublicKey))
+	for _, f := range a.cfg.Forwards {
+		line("INFO", "app URL for %s: %s/... (the Ascend app's URL, with its path)", f.Addr(), f.AppURL())
+	}
 	if p := relayProxy(a.cfg.Relay); p != "" {
 		line("INFO", "relay %s via proxy %s", a.cfg.Relay, p)
 	} else {

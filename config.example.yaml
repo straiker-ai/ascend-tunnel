@@ -4,10 +4,12 @@
 # Your Straiker org id.
 tenant: "1234"
 
-# The targets this agent may reach - nothing else, ever. One entry per host. An Ascend app reaches a
-# target as https://<host>.tun.straiker.ai/... - use that as the app's URL.
+# The targets this agent may reach - nothing else, ever. One entry per host; port 443 if omitted.
+# An Ascend app reaches a target as https://<host>.tun.straiker.ai/... (http:// for port 80); the
+# agent prints each one at start.
 allow:
-  - { host: chat.corp.internal, port: 443 }
+  - chat.corp.internal                 # port 443
+  # - { host: api.corp.internal, port: 8080 }
 
 # Optional. Defaults to Straiker's production relay and its pinned host key.
 # env: prod

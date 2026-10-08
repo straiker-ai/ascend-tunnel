@@ -36,6 +36,10 @@ const DefaultEnv = "prod"
 const (
 	maxSocketPath = 107 // sun_path is 108 bytes including the NUL
 	maxFanout     = 16
+	// DefaultPort is a target's port when an allow entry names only a host: the usual AI app.
+	DefaultPort = 443
+	// TunnelSuffix is the domain an Ascend app reaches a target under: https://<host>.<suffix>.
+	TunnelSuffix = "tun.straiker.ai"
 )
 
 var (
@@ -52,6 +56,16 @@ type Forward struct {
 
 // Addr is the target's dial address.
 func (f Forward) Addr() string { return net.JoinHostPort(f.Host, strconv.Itoa(f.Port)) }
+
+// AppURL is the URL an Ascend app reaches this target at (plus the app's own path). A tunnel name
+// carries no port; plain HTTP on 80 is http, anything else https.
+func (f Forward) AppURL() string {
+	scheme := "https"
+	if f.Port == 80 {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s.%s", scheme, f.Host, TunnelSuffix)
+}
 
 // Config is the validated configuration.
 type Config struct {
@@ -205,14 +219,19 @@ func parseForwards(allow []string, fanout int) ([]Forward, error) {
 	seen := map[string]bool{}
 	for i, raw := range allow {
 		host, port, ok := strings.Cut(raw, "\x00") // a {host, port} mapping
-		if !ok {
+		switch {
+		case ok && port == "":
+			port = strconv.Itoa(DefaultPort)
+		case !ok && !strings.Contains(raw, ":"):
+			host, port = strings.TrimSpace(raw), strconv.Itoa(DefaultPort)
+		case !ok:
 			var err error
 			if host, port, err = net.SplitHostPort(strings.TrimSpace(raw)); err != nil {
-				return nil, fmt.Errorf("allow[%d] needs host and port: %q", i, raw)
+				return nil, fmt.Errorf("allow[%d] must be host or host:port: %q", i, raw)
 			}
 		}
 		if host == "" || port == "" {
-			return nil, fmt.Errorf("allow[%d] needs host and port", i)
+			return nil, fmt.Errorf("allow[%d] must be host or host:port", i)
 		}
 		f := Forward{Host: strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")}
 		p, err := strconv.Atoi(strings.TrimSpace(port))
@@ -230,7 +249,7 @@ func parseForwards(allow []string, fanout int) ([]Forward, error) {
 		out = append(out, f)
 	}
 	if len(out) == 0 {
-		return nil, errors.New("allow must list at least one target (host:port)")
+		return nil, errors.New("allow must list at least one target (host, or host:port)")
 	}
 	return out, nil
 }

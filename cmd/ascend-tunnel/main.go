@@ -34,7 +34,7 @@ Usage:
   ascend-tunnel version         print the version
 
 Quick start:
-  ascend-tunnel --org <your Straiker org id> --allow chat.corp.internal:443
+  ascend-tunnel --org <your Straiker org id> --allow chat.corp.internal
 
 Run "ascend-tunnel run -h" for every flag. Flags override TUNNEL_* environment
 variables, which override the config file (-c, default %s).
@@ -80,7 +80,7 @@ func runAgent(cmd string, args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&path, "config", "", "config file (YAML)")
 	fs.StringVar(&o.Tenant, "org", "", "your Straiker org id")
 	fs.StringVar(&o.Tenant, "tenant", "", "same as -org")
-	fs.Var(&allow, "allow", "a target this agent may reach, host:port (repeat for more)")
+	fs.Var(&allow, "allow", "a target this agent may reach, host or host:port, port 443 if omitted (repeat for more)")
 	fs.StringVar(&o.Env, "env", "", "Straiker environment (default "+config.DefaultEnv+")")
 	fs.StringVar(&o.Relay, "relay", "", "relay URL (wss://...), instead of -env")
 	fs.StringVar(&o.HostKey, "host-key", "", "the relay's SSH host key to pin")
