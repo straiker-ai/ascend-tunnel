@@ -131,3 +131,18 @@ func TestPeekNeverCreatesAKey(t *testing.T) {
 		t.Fatalf("with a key saved, Peek reads it: %v", err)
 	}
 }
+
+func TestTheRequestTemplateIsWhatANewAppNeeds(t *testing.T) {
+	pub := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOUCMT9hLrSSmTyPYnU+xGO8/gCs7AZy1c9ssMyLd6Mw agent@host"
+	var tpl map[string]any
+	if err := json.Unmarshal([]byte(RequestTemplate(pub)), &tpl); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
+	keys, _ := tpl["_tunnel_agent_keys"].([]any)
+	if len(keys) != 1 || keys[0] != PasteForm(pub) {
+		t.Fatalf("lists the key in its paste form: %v", tpl)
+	}
+	if tpl["_adaptor_src"] != "v0:passthrough" || !strings.Contains(tpl["prompt"].(string), "{{ PROMPT }}") {
+		t.Fatalf("carries the placeholder adaptor and the prompt placeholder the console requires: %v", tpl)
+	}
+}

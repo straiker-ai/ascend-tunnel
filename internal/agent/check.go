@@ -34,6 +34,7 @@ func (a *Agent) Check(ctx context.Context, w io.Writer, scope CheckScope) bool {
 		} else {
 			s.add("INFO", "agent", fmt.Sprintf("org %s, agent %s", a.id.Tenant, a.id.AgentID), "")
 			s.add("INFO", "agent", "key (paste into each app's _tunnel_agent_keys): "+identity.PasteForm(a.id.PublicKey), "")
+			s.add("INFO", "agent", "request template for a new Ascend app: "+identity.RequestTemplate(a.id.PublicKey), "")
 		}
 		if p := relayProxy(a.cfg.Relay); p != "" {
 			s.add("INFO", "relay", fmt.Sprintf("%s via proxy %s", redact(a.cfg.Relay), p), "")

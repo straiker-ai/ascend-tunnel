@@ -513,7 +513,8 @@ func (a *Agent) probeTunnel(ctx context.Context, s *steps, host string) {
 		s.add("PASS", "login", "an Ascend app lists this agent's key: the relay accepts it", "")
 	case isUnlisted(err):
 		s.add("WAIT", "login", "no Ascend app lists this agent's key yet",
-			fmt.Sprintf("Paste the agent key above into the app's _tunnel_agent_keys, then click Test connection. "+
+			fmt.Sprintf("Paste the request template above into the Ascend app (or the key into an existing app's "+
+				"_tunnel_agent_keys), then click Test connection. "+
 				"Already pasted? Check that the app is in org %s and lists this exact key (a new state dir means "+
 				"a new key).", a.id.Tenant))
 	default:

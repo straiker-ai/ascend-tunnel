@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -142,6 +143,14 @@ func PasteForm(publicKey string) string {
 		return f[1]
 	}
 	return publicKey
+}
+
+// RequestTemplate is the request template to paste into a new Ascend app this agent serves: the
+// prompt placeholder the console requires, this agent's key, and the placeholder adaptor that lets
+// Test connection pass on the link alone, before anyone has built the app's real adaptor.
+func RequestTemplate(publicKey string) string {
+	key, _ := json.Marshal(PasteForm(publicKey))
+	return fmt.Sprintf(`{"prompt": "{{ PROMPT }}", "_tunnel_agent_keys": [%s], "_adaptor_src": "v0:passthrough"}`, key)
 }
 
 // LoginSlug names the relay login for an org and agent: sha256("<tenant>/<agent id>"), first 12 hex.

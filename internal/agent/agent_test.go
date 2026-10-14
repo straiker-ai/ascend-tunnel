@@ -285,6 +285,9 @@ func TestTheTunnelCarriesConnectionsToTheTarget(t *testing.T) {
 			if len(urls) != 1 || urls[0] != target.AppURL() {
 				t.Fatalf("the identity line names each target's app URL: %v", e)
 			}
+			if e["request_template"] != identity.RequestTemplate(a.id.PublicKey) {
+				t.Fatalf("the identity line carries the request template to paste: %v", e)
+			}
 		}
 	}
 }
@@ -473,6 +476,7 @@ func TestCheckReportsEachStep(t *testing.T) {
 		"nothing listens on port",
 		"RESULT FAIL: this machine cannot reach 1 of 2 app(s)",
 		identity.PasteForm(a.id.PublicKey),
+		"request template for a new Ascend app: " + identity.RequestTemplate(a.id.PublicKey),
 		"INFO   app       " + target.Addr() + " is reached at " + target.AppURL() + "/...",
 	} {
 		if !strings.Contains(out.String(), want) {

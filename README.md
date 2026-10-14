@@ -102,13 +102,14 @@ means its app URL starts with `http://` instead.
 Steps 1 and 2 only checked. Now start the agent for real, as a service that keeps running for your
 assessments, with the same org and allowlist - see [Running it as a service](#running-it-as-a-service).
 On its first start it creates its key in its state directory (the private half never leaves this
-machine) and logs it:
+machine) and logs it, with the request template for step 4:
 
 ```
-{"event":"identity", ... "agent_key":"AAAAC3NzaC1lZDI1NTE5...", ...}
+{"event":"identity", ... "agent_key":"AAAAC3NzaC1lZDI1NTE5...",
+ "request_template":"{\"prompt\": \"{{ PROMPT }}\", \"_tunnel_agent_keys\": [...], ...}", ...}
 ```
 
-**Done when:** you have copied `agent_key` from the agent's log. Until step 4 the agent logs `waiting`
+**Done when:** you have copied `request_template` (or `agent_key`) from the agent's log. Until step 4 the agent logs `waiting`
 once a minute - expected.
 
 The agent keeps this key across restarts and upgrades, so you paste it once. It gets a new key only
@@ -121,16 +122,30 @@ In the app's settings in Ascend:
 
 - **URL:** the app URL from step 2 plus the app's path, e.g.
   `https://chat.corp.internal.tun.straiker.ai/v1/chat`. No port: it lives in `--allow`.
-- **Request template:** add the key, as a list with one entry per agent:
-  `"_tunnel_agent_keys": ["AAAAC3NzaC1lZDI1NTE5..."]`. To have Ascend verify an app whose certificate
-  is from a private CA, also add that CA: `"_tunnel_ca": "<PEM>"`.
+- **Request template:** paste `request_template` from the agent's log (`ascend-tunnel key` and
+  `check` print it too):
+
+  ```json
+  {"prompt": "{{ PROMPT }}", "_tunnel_agent_keys": ["AAAAC3NzaC1lZDI1NTE5..."], "_adaptor_src": "v0:passthrough"}
+  ```
+
+  - `_tunnel_agent_keys` authorizes this agent for the app: a list, one entry per agent.
+  - `_adaptor_src: v0:passthrough` is a placeholder. It lets **Test connection** pass on the link
+    alone, so you can save the app before anyone knows how your app expects to be called. Straiker
+    then builds the app's real adaptor and stores it over the placeholder; Ascend runs no assessment
+    on the app until then.
+  - To have Ascend verify an app whose certificate is from a private CA, also add that CA:
+    `"_tunnel_ca": "<PEM>"`.
+
+  Adding an app to an agent that already serves others? Same template, same key.
 
 Click **Test connection**.
 
-**Done when:** Test connection passes - that proves the whole path, and setup is done. Within seconds
-the agent logs `connected`, then one `connection` line per request.
+**Done when:** Test connection passes - that proves the whole path, and your setup is done. Within
+seconds the agent logs `connected`, then one `connection` line per request.
 
-Then run assessments in Ascend, and keep the agent running while they do. More apps: add each host to
+Once Straiker has stored the app's adaptor, run assessments in Ascend, and keep the agent running
+while they do. More apps: add each host to
 `--allow`, restart the agent, and repeat step 4 with the same key. For availability, run a second
 agent and list both keys.
 

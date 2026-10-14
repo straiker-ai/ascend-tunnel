@@ -81,7 +81,9 @@ func (a *Agent) Run(ctx context.Context) {
 	}
 	a.audit.Log("identity", "tenant", a.id.Tenant, "agent_id", a.id.AgentID,
 		"agent_key", identity.PasteForm(a.id.PublicKey), "app_urls", urls,
-		"hint", "paste agent_key into each Ascend app's _tunnel_agent_keys; an app's URL is its target's app_url plus the app's path")
+		"request_template", identity.RequestTemplate(a.id.PublicKey),
+		"hint", "a new Ascend app: URL = its target's app_url plus the app's path; request template = request_template "+
+			"(an existing app: add agent_key to its _tunnel_agent_keys)")
 	if a.cfg.HostKey == "" {
 		a.audit.Log("warning", "error", "the relay's host key is not pinned (set host_key)")
 	}

@@ -183,5 +183,6 @@ func printKey(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, identity.PasteForm(id.PublicKey))
 	fmt.Fprintf(stderr, "# agent id %s: paste the line above into each Ascend app's _tunnel_agent_keys\n", id.AgentID)
+	fmt.Fprintf(stderr, "# request template for a new Ascend app: %s\n", identity.RequestTemplate(id.PublicKey))
 	return 0
 }
