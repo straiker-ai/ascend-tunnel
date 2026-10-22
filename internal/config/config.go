@@ -31,6 +31,15 @@ var Environments = map[string]Environment{
 		Relay:   "wss://ascendai-bridge.prod.straiker.ai/tunnel",
 		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOo1Og0g1ySNPvGcpekTrxnLXVc2+2QJ5n3aisivR4X2",
 	},
+	// Straiker's own testing; customers stay on prod.
+	"stage": {
+		Relay:   "wss://ascendai-bridge.stage.straiker.ai/tunnel",
+		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKGHd3fIQ4SHvPRrgykwvRGdm1GmeUMhx2JecwNobxhn",
+	},
+	"dev": {
+		Relay:   "wss://ascendai-bridge.dev.straiker.ai/tunnel",
+		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBClL+8BZ6RXDGdP8iPvatZgyVnxlLTNlcfgKVpdKYay",
+	},
 }
 
 // DefaultEnv is the environment used when neither a relay nor an environment is given.
