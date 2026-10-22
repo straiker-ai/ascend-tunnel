@@ -76,6 +76,26 @@ func TestNoFileAndNoRelayUsesTheBuiltInEnvironment(t *testing.T) {
 	}
 }
 
+func TestEachEnvironmentPinsItsOwnRelayKey(t *testing.T) {
+	for name, e := range Environments {
+		c, err := Load("", Overrides{Tenant: "1", Env: name, Allow: []string{"h:1"}}, noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Relay != e.Relay || c.HostKey != e.HostKey || c.HostKey == "" {
+			t.Errorf("%s: relay %s key %q, want its own relay and pinned key", name, c.Relay, c.HostKey)
+		}
+		// Naming the relay instead of the environment still pins that relay's key.
+		c, err = Load("", Overrides{Tenant: "1", Relay: e.Relay, Allow: []string{"h:1"}}, noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.HostKey != e.HostKey {
+			t.Errorf("%s: --relay %s pinned %q, want %q", name, e.Relay, c.HostKey, e.HostKey)
+		}
+	}
+}
+
 func TestABadConfigIsRefused(t *testing.T) {
 	long := strings.Repeat("a", 90) + ".corp:443"
 	cases := []struct {
