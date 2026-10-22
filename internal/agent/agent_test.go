@@ -38,6 +38,9 @@ type testRelay struct {
 	sockets  map[string]*ssh.ServerConn
 	users    []string
 	upgrades int
+	// Withhold one registration reply without closing the transport.
+	stallForward string
+	stalled      chan struct{}
 }
 
 func newTestRelay(t *testing.T) *testRelay {
@@ -116,6 +119,12 @@ func (r *testRelay) handle(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		r.mu.Lock()
+		if p.SocketPath == r.stallForward {
+			r.stallForward = ""
+			close(r.stalled)
+			r.mu.Unlock()
+			continue
+		}
 		r.sockets[p.SocketPath] = sc
 		r.mu.Unlock()
 		_ = q.Reply(true, nil)
@@ -286,6 +295,117 @@ func TestTheTunnelCarriesConnectionsToTheTarget(t *testing.T) {
 				t.Fatalf("the identity line names each target's app URL: %v", e)
 			}
 		}
+	}
+}
+
+func TestAStalledForwardRegistrationReconnects(t *testing.T) {
+	r := newTestRelay(t)
+	target := echoTarget(t)
+	second := target
+	second.Host = "localhost"
+	a, audit := newAgent(t, r, []config.Forward{target, second}, 1)
+	r.list(a.id.Signer.PublicKey())
+	paths := []string{
+		identity.SocketPath(a.id.SocketDir, target.Host, 0),
+		identity.SocketPath(a.id.SocketDir, second.Host, 0),
+	}
+	stalled := make(chan struct{})
+	r.mu.Lock()
+	r.stallForward, r.stalled = paths[1], stalled
+	r.mu.Unlock()
+	a.sleep = func(ctx context.Context, _ time.Duration) error {
+		return sleepCtx(ctx, time.Millisecond)
+	}
+	runAgent(t, a)
+	select {
+	case <-stalled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the agent never attempted the second forward")
+	}
+	r.mu.Lock()
+	first := r.sockets[paths[0]]
+	r.mu.Unlock()
+	if first == nil {
+		t.Fatal("the first forward must be registered before the second stalls")
+	}
+
+	// Use the production keepalive timing: the SSH handshake deadline has already
+	// been cleared, and no reply or transport error will release ListenUnix.
+	deadline := time.Now().Add(keepaliveEvery + keepaliveWait + 10*time.Second)
+	var recoveredConn *ssh.ServerConn
+	for {
+		r.mu.Lock()
+		next := r.sockets[paths[1]]
+		recovered := next != nil && next != first && r.sockets[paths[0]] == next
+		r.mu.Unlock()
+		if recovered {
+			recoveredConn = next
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a stalled forward registration did not reconnect and restore both forwards")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// Bound channel opening and EOF as well as registration. Closing this exact
+	// connection interrupts either operation; join its cleanup on every exit.
+	trafficCtx, cancelTraffic := context.WithTimeout(context.Background(), 5*time.Second)
+	trafficClosed := make(chan struct{})
+	go func() {
+		<-trafficCtx.Done()
+		recoveredConn.Close()
+		close(trafficClosed)
+	}()
+	defer func() {
+		cancelTraffic()
+		<-trafficClosed
+	}()
+	for _, path := range paths {
+		ch, reqs, err := recoveredConn.OpenChannel("forwarded-streamlocal@openssh.com",
+			ssh.Marshal(struct{ SocketPath, Reserved string }{path, ""}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		go ssh.DiscardRequests(reqs)
+		if got := roundTrip(t, ch, "after reconnect"); got != "after reconnect" {
+			t.Fatalf("reconnected forward echoed %q", got)
+		}
+	}
+	if err := trafficCtx.Err(); err != nil {
+		t.Fatalf("reconnected traffic did not complete before its deadline: %v", err)
+	}
+	if countEvents(audit.events(t), "disconnected") == 0 {
+		t.Fatalf("the stalled session must log its disconnect: %s", audit.String())
+	}
+}
+
+func TestAStalledForwardRegistrationStopsOnCancellation(t *testing.T) {
+	r := newTestRelay(t)
+	target := config.Forward{Host: "127.0.0.1", Port: 1}
+	a, _ := newAgent(t, r, []config.Forward{target}, 1)
+	r.list(a.id.Signer.PublicKey())
+	stalled := make(chan struct{})
+	r.mu.Lock()
+	r.stallForward = identity.SocketPath(a.id.SocketDir, target.Host, 0)
+	r.stalled = stalled
+	r.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		a.Run(ctx)
+		close(done)
+	}()
+	select {
+	case <-stalled:
+	case <-time.After(5 * time.Second):
+		t.Error("the agent never attempted the forward")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the agent did not stop during forward registration")
 	}
 }
 

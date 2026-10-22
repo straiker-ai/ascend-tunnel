@@ -43,7 +43,7 @@ jobs:
           curl -fsSLo /tmp/jsign.deb https://github.com/ebourg/jsign/releases/download/7.5/jsign_7.5_all.deb
           echo "7b4a01ba81e9ee866f09a5e45d40c928707eb5286f4e20d4042c67a141ae5e62  /tmp/jsign.deb" | sha256sum -c -
           sudo apt-get install -y /tmp/jsign.deb
-      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: "~> v2"
           args: release --clean

@@ -239,6 +239,9 @@ func (a *Agent) runSession(ctx context.Context, link int) error {
 		<-sctx.Done()
 		client.Close()
 	}()
+	// Registration waits for SSH replies too; a silent link must not stall here
+	// forever before the keepalive watchdog has started.
+	go a.keepalive(sctx, client)
 
 	forwards := a.linkForwards(link)
 	hosts := make([]string, 0, len(forwards))
@@ -256,7 +259,6 @@ func (a *Agent) runSession(ctx context.Context, link int) error {
 		a.audit.Log("forward", "link", link, "socket", f.socket, "dest", f.target.Addr())
 		go a.serve(sctx, ln, f, link)
 	}
-	go a.keepalive(sctx, client)
 	err = client.Wait()
 	if sctx.Err() != nil || err == nil || errors.Is(err, io.EOF) {
 		return nil
