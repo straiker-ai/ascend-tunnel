@@ -138,7 +138,7 @@ func TestABrowserCaptureNeedsAPersonAndTheirApproval(t *testing.T) {
 	c := &fakeCapturer{fakeApprover: fakeApprover{answer: true}}
 	r := New(policy.Default(), Info{}, http.DefaultClient, nil, c)
 	out, isErr := callAs(t, r, "adaptor-builder", "browser.capture",
-		`{"url":"https://www.sharkninja.com/","app_id":"01a16263-de1f-7754-bd60-490a7cf2945f","instructions":"open the chat"}`)
+		`{"url":"https://www.example.com/","app_id":"00000000-0000-7000-8000-000000000001","instructions":"open the chat"}`)
 	if isErr || out["recording"] != true || len(c.opened) != 1 || len(c.asked) != 1 {
 		t.Fatalf("capture: %v opened=%v asked=%v", out, c.opened, c.asked)
 	}
@@ -146,7 +146,7 @@ func TestABrowserCaptureNeedsAPersonAndTheirApproval(t *testing.T) {
 	if out, isErr := callAs(t, r, "a", "browser.capture", `{"url":"https://other.example/"}`); !isErr || !strings.Contains(out["error"].(string), "did not approve") {
 		t.Fatalf("declined: %v", out)
 	}
-	if out, isErr := callAs(t, r, "a", "browser.capture", `{"url":"https://www.sharkninja.com/","app_id":"nope"}`); !isErr || !strings.Contains(out["error"].(string), "uuid") {
+	if out, isErr := callAs(t, r, "a", "browser.capture", `{"url":"https://www.example.com/","app_id":"nope"}`); !isErr || !strings.Contains(out["error"].(string), "uuid") {
 		t.Fatalf("bad app id: %v", out)
 	}
 	plain := New(policy.Default(), Info{}, http.DefaultClient, nil, &fakeApprover{answer: true})
@@ -168,11 +168,11 @@ func (f *fakePlatform) PlatformGet(ctx context.Context, path string, q url.Value
 	var body string
 	switch {
 	case strings.HasSuffix(path, "/applications"):
-		body = `{"data":[{"id":"aapp_5DFRjKZiISzpgGt6jHbFiz","name":"yg-test-chattie","url":"https://chattie.dev.straiker.ai/chat","headers":"secret"}],"has_more":false}`
+		body = `{"data":[{"id":"aapp_TestApp0000000000001","name":"support-bot","url":"https://chat.example.com/chat","headers":"secret"}],"has_more":false}`
 	case strings.HasSuffix(path, "/assessments"):
-		body = `{"data":[{"id":"asmt_2jgDFTN91Bz8ItempbOsmN","status":"complete","score":23.5,"total":315,"failed":143,"summary":"long","category_summary":[{"id":"app_grounding","name":"Application Grounding","failed":141,"total":270,"keyfindings":["x"],"controls":[{"id":"science","failed":10,"total":12}]}]}],"has_more":true}`
+		body = `{"data":[{"id":"asmt_TestRun0000000000001","status":"complete","score":40,"total":200,"failed":120,"summary":"long","category_summary":[{"id":"app_grounding","name":"Application Grounding","failed":141,"total":270,"keyfindings":["x"],"controls":[{"id":"science","failed":10,"total":12}]}]}],"has_more":true}`
 	default:
-		body = `{"id":"asmt_2jgDFTN91Bz8ItempbOsmN","summary":"words","recommendations":[{"title":"Improve system prompt","description":"long"}],"category_summary":[{"id":"app_grounding","controls":[{"id":"science","failed":10,"total":12,"keyfindings":["x"]}]}]}`
+		body = `{"id":"asmt_TestRun0000000000001","summary":"words","recommendations":[{"title":"Improve system prompt","description":"long"}],"category_summary":[{"id":"app_grounding","controls":[{"id":"science","failed":10,"total":12,"keyfindings":["x"]}]}]}`
 	}
 	return json.Unmarshal([]byte(body), out)
 }
@@ -181,24 +181,24 @@ func TestAscendReadsAreFixedAndTrimmed(t *testing.T) {
 	pl := &fakePlatform{}
 	r := New(policy.Default(), Info{}, http.DefaultClient, nil, pl)
 	apps, isErr := callAs(t, r, "a", "ascend.apps", `{}`)
-	if isErr || strings.Contains(fmt.Sprint(apps), "secret") || !strings.Contains(fmt.Sprint(apps), "chattie.dev.straiker.ai") {
+	if isErr || strings.Contains(fmt.Sprint(apps), "secret") || !strings.Contains(fmt.Sprint(apps), "chat.example.com") {
 		t.Fatalf("apps: %v", apps)
 	}
-	runs, isErr := callAs(t, r, "a", "ascend.runs", `{"app":"aapp_5DFRjKZiISzpgGt6jHbFiz","limit":5}`)
+	runs, isErr := callAs(t, r, "a", "ascend.runs", `{"app":"aapp_TestApp0000000000001","limit":5}`)
 	if isErr || runs["has_more"] != true || strings.Contains(fmt.Sprint(runs), "keyfindings") || strings.Contains(fmt.Sprint(runs), "controls") {
 		t.Fatalf("runs: %v", runs)
 	}
-	one, _ := callAs(t, r, "a", "ascend.run", `{"app":"aapp_5DFRjKZiISzpgGt6jHbFiz","run":"asmt_2jgDFTN91Bz8ItempbOsmN"}`)
+	one, _ := callAs(t, r, "a", "ascend.run", `{"app":"aapp_TestApp0000000000001","run":"asmt_TestRun0000000000001"}`)
 	if fmt.Sprint(one["recommendations"]) != "[Improve system prompt]" || !strings.Contains(fmt.Sprint(one), "science") {
 		t.Fatalf("run: %v", one)
 	}
-	for _, bad := range []string{`{"app":"../../admin"}`, `{"app":"aapp_5DFRjKZiISzpgGt6jHbFiz/../x"}`, `{"app":"aapp_5DFRjKZiISzpgGt6jHbFiz","starting_after":"x?y"}`} {
+	for _, bad := range []string{`{"app":"../../admin"}`, `{"app":"aapp_TestApp0000000000001/../x"}`, `{"app":"aapp_TestApp0000000000001","starting_after":"x?y"}`} {
 		if out, isErr := callAs(t, r, "a", "ascend.runs", bad); !isErr {
 			t.Errorf("%s must be refused: %v", bad, out)
 		}
 	}
-	want := []string{"/api/v3/ascend/applications?limit=100", "/api/v3/ascend/applications/aapp_5DFRjKZiISzpgGt6jHbFiz/assessments?limit=5",
-		"/api/v3/ascend/applications/aapp_5DFRjKZiISzpgGt6jHbFiz/assessments/asmt_2jgDFTN91Bz8ItempbOsmN?"}
+	want := []string{"/api/v3/ascend/applications?limit=100", "/api/v3/ascend/applications/aapp_TestApp0000000000001/assessments?limit=5",
+		"/api/v3/ascend/applications/aapp_TestApp0000000000001/assessments/asmt_TestRun0000000000001?"}
 	if strings.Join(pl.paths, " ") != strings.Join(want, " ") {
 		t.Fatalf("paths: %v", pl.paths)
 	}

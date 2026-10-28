@@ -142,7 +142,7 @@ browser's DevTools and attach it with `/har`.
 
 ### Your Ascend data
 
-Ask about your assessments ("how have the runs on my chattie app been trending?") and the agent reads them through
+Ask about your assessments ("how have the runs on my support-bot app been trending?") and the agent reads them through
 this machine, with your own login: the `ascend` tools make fixed, read-only calls to Straiker's API (your
 applications, an application's runs, one run). The cloud sends only ids, and your token never leaves this
 machine, so the agent sees exactly what you can.

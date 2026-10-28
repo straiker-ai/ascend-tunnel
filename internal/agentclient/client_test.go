@@ -235,13 +235,13 @@ func TestLoginIsSavedLikeTheAWSCLIDoes(t *testing.T) {
 
 func TestSitesAreRememberedPerOrg(t *testing.T) {
 	t.Setenv("ASCEND_AGENT_HOME", t.TempDir())
-	if err := AllowSite("1", "WWW.SharkNinja.com"); err != nil {
+	if err := AllowSite("1", "WWW.Example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if !SiteAllowed("1", "www.sharkninja.com") || SiteAllowed("2", "www.sharkninja.com") {
+	if !SiteAllowed("1", "www.example.com") || SiteAllowed("2", "www.example.com") {
 		t.Fatal("an always-allowed site belongs to its org")
 	}
-	if removed, _ := ForgetSite("1", "www.sharkninja.com"); !removed || SiteAllowed("1", "www.sharkninja.com") {
+	if removed, _ := ForgetSite("1", "www.example.com"); !removed || SiteAllowed("1", "www.example.com") {
 		t.Fatal("forget")
 	}
 }
@@ -294,13 +294,13 @@ func TestProdUnlessTheConfigFileNamesAnotherEnvironment(t *testing.T) {
 func TestSignInFindsTheOrgAndPinsTheKey(t *testing.T) {
 	g := newGateway(t)
 	g.mux.HandleFunc("GET /api/v3/ascend/agent/whoami", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"tenant":"1","principal":"yg@straiker.ai","sessionKey":"K","agentApi":"https://bridge/agent/v1"}`)
+		fmt.Fprint(w, `{"tenant":"1","principal":"user@example.com","sessionKey":"K","agentApi":"https://bridge/agent/v1"}`)
 	})
 	c, err := SignIn(context.Background(), g.Server.Client(), "pat-1", "dev", g.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Env != "dev" || c.Org != "1" || c.User != "yg@straiker.ai" || c.SessionKeys["dev"] != "K" || c.AgentAPI == "" {
+	if c.Env != "dev" || c.Org != "1" || c.User != "user@example.com" || c.SessionKeys["dev"] != "K" || c.AgentAPI == "" {
 		t.Fatalf("config: %+v", c)
 	}
 	if _, err := SignIn(context.Background(), g.Server.Client(), "wrong", "dev", g.URL); err == nil {
@@ -324,7 +324,7 @@ func TestHARsAreUploadedGzippedToTheSession(t *testing.T) {
 		got, _ = io.ReadAll(zr)
 		fmt.Fprint(w, `{"traceId":"t1","trace":{"keptRequests":3,"totalRequests":9}}`)
 	})
-	app := "01a16263-de1f-7754-bd60-490a7cf2945f"
+	app := "00000000-0000-7000-8000-000000000001"
 	tr, err := g.client().UploadHAR(context.Background(), "s1", app, "here it is", []byte(`{"log":{"entries":[]}}`))
 	if err != nil || tr.TraceID != "t1" || tr.Trace.KeptRequests != 3 || string(got) != `{"log":{"entries":[]}}` {
 		t.Fatalf("%+v %v %q", tr, err, got)
