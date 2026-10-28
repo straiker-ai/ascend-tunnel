@@ -647,7 +647,21 @@ func waitFor(t *testing.T, cond func() bool) {
 }
 
 func TestRedactDropsProxyCredentials(t *testing.T) {
-	if got := redact("http://user:secret@proxy.corp:8080"); strings.Contains(got, "secret") {
-		t.Fatalf("a proxy password must never reach a log: %s", got)
+	for in, want := range redactCases {
+		if got := redact(in); got != want || strings.Contains(got, "cret") {
+			t.Errorf("redact(%q) = %q, want %q: a proxy password must never reach a log", in, got, want)
+		}
 	}
+}
+
+// The passwords with #, ? or / are the ones url.Parse fails on or splits in the wrong place.
+var redactCases = map[string]string{
+	"http://user:secret@proxy.corp:8080":   "http://redacted@proxy.corp:8080",
+	"http://user:se#cret@proxy.corp:8080":  "http://redacted@proxy.corp:8080",
+	"http://user:se?cret@proxy.corp:8080":  "http://redacted@proxy.corp:8080",
+	"http://user:se/cret@proxy.corp:8080":  "http://redacted@proxy.corp:8080",
+	"http://user:se@cret@proxy.corp:8080":  "http://redacted@proxy.corp:8080",
+	"user:secret@proxy.corp:8080":          "redacted@proxy.corp:8080", // HTTPS_PROXY without a scheme
+	"http://proxy.corp:8080":               "http://proxy.corp:8080",
+	"wss://ascendai-bridge.straiker.ai/ws": "wss://ascendai-bridge.straiker.ai/ws",
 }
