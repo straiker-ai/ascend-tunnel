@@ -89,6 +89,11 @@ nfpms:
         file_info:
           mode: 0644
 
+# Homebrew: one cask per binary in straiker-ai/homebrew-tap (brew install straiker-ai/tap/ascend-tunnel,
+# .../ascend-agent); ascend-agent's depends on ascend-tunnel's. Both carry the release's version.
+# Generated only (dist/homebrew/Casks): release.yml pushes them to the tap after it publishes the
+# release (scripts/publish-casks.sh), since a cask pushed here would point at a draft release's
+# downloads, which 404 until publish - and forever if the job fails before it.
 homebrew_casks:
   - name: ascend-tunnel
     ids: [ascend-tunnel]
@@ -98,8 +103,20 @@ homebrew_casks:
     repository:
       owner: straiker-ai
       name: homebrew-tap
-      token: "{{ .Env.PACKAGES_TOKEN }}"
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    skip_upload: true
+  - name: ascend-agent
+    ids: [ascend-agent]
+    homepage: https://github.com/straiker-ai/ascend-tunnel/blob/main/docs/ascend-agent.md
+    description: Serves tools to Straiker's cloud agents, under a policy you own
+    license: Apache-2.0
+    # Ascend Agent sets up the tunnel for a local app, so installing it brings ascend-tunnel too (on PATH,
+    # beside it in Homebrew's bin). The tunnel still installs alone, for a server that only tunnels.
+    dependencies:
+      - cask: straiker-ai/tap/ascend-tunnel
+    repository:
+      owner: straiker-ai
+      name: homebrew-tap
+    skip_upload: true
 
 scoops:
   - name: ascend-tunnel
@@ -111,7 +128,9 @@ scoops:
       owner: straiker-ai
       name: scoop-bucket
       token: "{{ .Env.PACKAGES_TOKEN }}"
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    # Generated only: straiker-ai/scoop-bucket doesn't exist yet, and an upload here would point at the
+    # draft release (see homebrew_casks). Publish it after the release, as the casks are, once it does.
+    skip_upload: true
 
 winget:
   - name: AscendTunnel
@@ -133,7 +152,9 @@ winget:
           owner: microsoft
           name: winget-pkgs
           branch: master
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    # Generated only: the straiker-ai/winget-pkgs fork doesn't exist yet, and the PR would point at the
+    # draft release (see homebrew_casks). Publish it after the release, as the casks are, once it does.
+    skip_upload: true
 
 release:
   github:

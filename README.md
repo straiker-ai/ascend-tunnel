@@ -25,13 +25,13 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 
 | | |
 |---|---|
-| macOS | `brew install straiker-ai/tap/ascend-tunnel` |
+| macOS | `brew install straiker-ai/tap/ascend-tunnel` (`straiker-ai/tap/ascend-agent` installs [ascend-agent](docs/ascend-agent.md) and the tunnel with it) |
 | Windows | the `.zip` from [Releases](../../releases) |
 | Linux | the `.deb` / `.rpm` from [Releases](../../releases) (installs a systemd service), or the archive |
 | Docker | `docker run ghcr.io/straiker-ai/ascend-tunnel` (see [Running it as a service](#running-it-as-a-service)) |
 | Anything else | the archive for your platform from [Releases](../../releases) - one static binary |
 
-macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). winget and Scoop aren't published yet: they need the `PACKAGES_TOKEN` secret (see `.goreleaser.yaml`).
+macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). The Homebrew casks are published once the release is (`scripts/publish-casks.sh`, with the `PACKAGES_TOKEN` secret). winget and Scoop manifests are generated but not published yet: their repositories don't exist (see `.goreleaser.yaml`).
 
 ### Verify a download
 
@@ -381,7 +381,7 @@ which only `v*` tags may use:
 | `APPLE_APP_PASSWORD` | secret | app-specific password of `APPLE_ID`, for `notarytool` |
 | `APPLE_ID`, `APPLE_TEAM_ID` | variable | the Apple ID that notarizes, and Straiker's team id |
 | `JSIGN_*` | secret | Windows Authenticode through a cloud HSM (`scripts/sign-windows.sh`); optional |
-| `PACKAGES_TOKEN` | secret | Homebrew, Scoop and winget manifests; optional |
+| `PACKAGES_TOKEN` | secret | contents write on straiker-ai/homebrew-tap, to publish the casks after the release; optional. Prerelease tags (`v1.2.3-rc.1`) never touch the tap |
 
 These are the same certificate and Apple ID that straiker-ai/sentry signs with. A tag fails if macOS signing or
 notarization is missing, rather than publishing binaries Gatekeeper would block. Windows signing stays optional

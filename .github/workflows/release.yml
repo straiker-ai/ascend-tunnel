@@ -66,6 +66,13 @@ jobs:
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # After publish, so a cask never points at a draft release's downloads (.goreleaser.yaml only generates
+      # them). Prerelease tags skip it.
+      - name: publish the Homebrew casks
+        if: env.PACKAGES_TOKEN != ''
+        run: scripts/publish-casks.sh
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - name: delete the signing keychain
         if: always()
         run: scripts/macos-keychain.sh delete
