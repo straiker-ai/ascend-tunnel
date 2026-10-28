@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   binaries:
-    runs-on: ubuntu-latest
+    # macOS: codesign and notarytool exist only there. Go cross-compiles every other platform from it.
+    runs-on: macos-14
     # Signing keys and the package token are secrets of this environment, which only v* tags (created
     # by admins only) may use - never repo secrets, which any branch's workflow could read.
     environment: release
@@ -20,11 +21,13 @@ jobs:
     env:
       # Each credential is optional (the `release` environment's secrets): its step is skipped when absent.
       PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}               # homebrew-tap, scoop-bucket, winget-pkgs fork
-      MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}               # Developer ID Application, base64 .p12
-      MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-      MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}           # App Store Connect API key, base64 .p8
+      # macOS, as straiker-ai/sentry signs: the same Developer ID certificate and Apple ID. Required on a tag.
+      REQUIRE_MACOS_SIGNING: "1"
+      MACOS_APP_P12: ${{ secrets.MACOS_APP_P12 }}                 # Developer ID Application, base64 .p12
+      MACOS_APP_P12_PASSWORD: ${{ secrets.MACOS_APP_P12_PASSWORD }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}       # app-specific password, for notarytool
+      APPLE_ID: ${{ vars.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       JSIGN_STORETYPE: ${{ secrets.JSIGN_STORETYPE }}             # Windows Authenticode via a cloud HSM
       JSIGN_KEYSTORE: ${{ secrets.JSIGN_KEYSTORE }}
       JSIGN_STOREPASS: ${{ secrets.JSIGN_STOREPASS }}
@@ -39,10 +42,9 @@ jobs:
           go-version-file: go.mod
       - name: install jsign
         if: env.JSIGN_STORETYPE != ''
-        run: |
-          curl -fsSLo /tmp/jsign.deb https://github.com/ebourg/jsign/releases/download/7.5/jsign_7.5_all.deb
-          echo "7b4a01ba81e9ee866f09a5e45d40c928707eb5286f4e20d4042c67a141ae5e62  /tmp/jsign.deb" | sha256sum -c -
-          sudo apt-get install -y /tmp/jsign.deb
+        run: brew install jsign
+      - name: create the signing keychain
+        run: scripts/macos-keychain.sh create
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: "~> v2"
@@ -57,6 +59,9 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/checksums.txt
+      - name: delete the signing keychain
+        if: always()
+        run: scripts/macos-keychain.sh delete
 
   image:
     runs-on: ubuntu-latest

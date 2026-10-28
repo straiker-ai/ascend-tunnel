@@ -24,20 +24,10 @@ builds:
         # Authenticode-signs Windows binaries when signing is configured; a no-op otherwise.
         - cmd: sh scripts/sign-windows.sh "{{ .Path }}"
           output: true
-
-notarize:
-  macos:
-    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-      ids: [ascend-tunnel]
-      sign:
-        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
-        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
-      notarize:
-        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
-        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
-        key: "{{ .Env.MACOS_NOTARY_KEY }}"
-        wait: true
-        timeout: 20m
+        # Developer ID-signs and notarizes darwin binaries on a macOS runner with the keychain set up
+        # (scripts/macos-keychain.sh); a no-op elsewhere, and a failure on a tag (REQUIRE_MACOS_SIGNING).
+        - cmd: bash scripts/sign-macos.sh "{{ .Path }}" "{{ .Os }}"
+          output: true
 
 archives:
   - id: ascend-tunnel
@@ -83,13 +73,6 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.PACKAGES_TOKEN }}"
     skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
-    # The binary isn't notarized yet; without this macOS kills it on first run (exit 137).
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ascend-tunnel"]
-          end
 
 scoops:
   - name: ascend-tunnel
