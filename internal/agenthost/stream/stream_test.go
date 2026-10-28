@@ -185,6 +185,25 @@ func TestPostRetriesOnlyTransientFailures(t *testing.T) {
 	}
 }
 
+func TestEveryRequestNamesThisProcess(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get(wire.HeaderInstance))
+		w.WriteHeader(204)
+	}))
+	defer srv.Close()
+	c := newClient(srv.URL)
+	body := wire.Result{SID: "s", CallID: "c1", Message: json.RawMessage(`{}`)}
+	for range 2 {
+		if err := c.Post(context.Background(), wire.PathResults, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != 2 || len(seen[0]) != 32 || seen[0] != seen[1] {
+		t.Fatalf("one id for the life of the process, on every request: %q", seen)
+	}
+}
+
 func TestStreamRefusesNonSSE(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

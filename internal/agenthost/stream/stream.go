@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	crand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -337,8 +339,16 @@ func (c *Client) request(ctx context.Context, method, path string, q url.Values,
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set(wire.HeaderProtocol, wire.Version)
+	req.Header.Set(wire.HeaderInstance, instance)
 	return req, nil
 }
+
+// instance identifies this process to Straiker for as long as it runs: it holds the host's poll lease.
+var instance = func() string {
+	b := make([]byte, 16)
+	_, _ = crand.Read(b)
+	return hex.EncodeToString(b)
+}()
 
 func checkStatus(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {

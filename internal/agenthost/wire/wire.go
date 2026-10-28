@@ -33,6 +33,7 @@ const (
 	ParamWait         = "wait"
 	HeaderLastEventID = "Last-Event-ID"
 	HeaderProtocol    = "X-Ascend-Agent-Protocol"
+	HeaderInstance    = "X-Ascend-Agent-Instance" // this process, so a second copy of the host is refused, not run twice
 )
 
 // Timing. Straiker sends a heartbeat at least every HeartbeatInterval; a host that sees nothing for

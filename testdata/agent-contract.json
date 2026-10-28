@@ -23,7 +23,8 @@
   },
   "headers": {
     "last_event_id": "Last-Event-ID",
-    "protocol": "X-Ascend-Agent-Protocol"
+    "protocol": "X-Ascend-Agent-Protocol",
+    "instance": "X-Ascend-Agent-Instance"
   },
   "timing_s": {
     "heartbeat_interval": 15,
