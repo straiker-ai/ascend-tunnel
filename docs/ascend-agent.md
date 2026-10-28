@@ -87,8 +87,9 @@ ascend-agent policy show  -policy ascend-agent.yaml   # targets, tools, what eac
 
 ## Running it
 
-Download it from [Releases](https://github.com/straiker-ai/ascend-tunnel/releases) (or
-`go build -o ascend-agent ./cmd/ascend-agent`), then:
+Install it with `brew install straiker-ai/tap/ascend-agent` (which installs `ascend-tunnel` too), or
+download it from [Releases](https://github.com/straiker-ai/ascend-tunnel/releases), or
+`go build -o ascend-agent ./cmd/ascend-agent`. Then:
 
 ```bash
 ascend-agent key                          # this machine's key (the tunnel's), to enrol the host
