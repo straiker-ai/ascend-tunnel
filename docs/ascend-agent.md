@@ -5,9 +5,8 @@
 The agents (their prompts, models and reasoning) run in Straiker's cloud. The host only runs the narrow,
 named tools you enable, against the targets you name.
 
-> **Status: experimental.** It ships in every release beside `ascend-tunnel`: its own archives, and the
-> Homebrew cask (`brew install straiker-ai/tap/ascend-agent`, which installs `ascend-tunnel` too). It is
-> not in the deb/rpm packages or the Docker image, and Straiker's agent API that it connects to is not deployed yet. The protocol
+> **Status: experimental, not released.** It is not in the release pipeline, the packages or the
+> Docker image, and Straiker's agent API that it connects to is not deployed yet. The protocol
 > (`agent/v0`, pinned in [`testdata/agent-contract.json`](../testdata/agent-contract.json)) may change.
 > `ascend-tunnel` is unaffected: separate binary, same module, no shared code changed.
 
