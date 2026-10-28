@@ -107,8 +107,12 @@ func Parse(data []byte) (*Policy, error) {
 	return &p, nil
 }
 
-// DefaultAgents are what Straiker's agents may call under the built-in default.
-var DefaultAgents = map[string][]string{"adaptor-builder": {"env.*", "net.*", "http.*", "browser.*", "ascend.*"}}
+// DefaultAgents are what Straiker's agents may call under the built-in default: Ascend Agent itself ("ascend")
+// and the adaptor builder it hands builds to, each signing its own calls.
+var DefaultAgents = map[string][]string{
+	"ascend":          {"env.*", "net.*", "http.*", "browser.*", "ascend.*"},
+	"adaptor-builder": {"env.*", "net.*", "http.*", "browser.*", "ascend.*"},
+}
 
 // Default is the policy when there is no file: every pack, no targets, and a person at the terminal approves
 // each site the first time an agent wants to reach it.

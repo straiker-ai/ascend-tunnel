@@ -71,7 +71,8 @@ targets:                          # what tools may reach; the cloud only ever se
 packs: [env, net, http]           # tool packs to turn on
 
 agents:                           # which Straiker agent may call what: <pack>.<tool> or <pack>.*
-  adaptor-builder: [env.info, net.check, http.probe]
+  ascend: [env.info, net.check]                       # Ascend Agent itself
+  adaptor-builder: [env.info, net.check, http.probe]  # the adaptor builder, during a build
 
 limits: { concurrent_calls: 4, calls_per_minute: 120 }
 # audit: { file: /var/log/straiker/ascend-agent-audit.jsonl }

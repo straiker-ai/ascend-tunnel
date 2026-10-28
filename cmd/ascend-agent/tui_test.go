@@ -80,11 +80,20 @@ func TestAppIDsAreConsoleUUIDs(t *testing.T) {
 	}
 }
 
+func TestTheAskingAgentIsNamed(t *testing.T) {
+	for id, want := range map[string]string{"ascend": "Ascend Agent", "adaptor-builder": "the adaptor builder",
+		"other\x1b[31m": "other"} {
+		if got := agentName(id); got != want {
+			t.Errorf("agentName(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
 func TestApprovalsAnswerWithOneKey(t *testing.T) {
 	m := newChatModel(context.Background(), nil, chatConfig{org: "1"})
 	reply := make(chan approval, 1)
 	m.Update(approvalMsg{agent: "adaptor-builder", tool: "http.probe", url: "https://www.example.com/", host: "www.example.com", reply: reply})
-	if v := m.View(); !strings.Contains(v, "Allow adaptor-builder to read https://www.example.com/") || !strings.Contains(v, "[a] always") {
+	if v := m.View(); !strings.Contains(v, "Allow the adaptor builder to read https://www.example.com/") || !strings.Contains(v, "[a] always") {
 		t.Fatalf("view: %q", v)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}) // other keys type as usual

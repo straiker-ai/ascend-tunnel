@@ -433,6 +433,17 @@ func (m *chatModel) finishCapture() tea.Cmd {
 	}))
 }
 
+// agentName is how a person sees the agent asking: Straiker's agents by name, anything else as signed.
+func agentName(id string) string {
+	switch id {
+	case "ascend":
+		return "Ascend Agent"
+	case "adaptor-builder":
+		return "the adaptor builder"
+	}
+	return orNone(agentclient.Clean(id))
+}
+
 // keepCapture saves a capture (already redacted) under ~/.ascend-agent/captures, readable only by this user.
 func keepCapture(har []byte) (string, error) {
 	home, err := agentclient.Home()
@@ -683,7 +694,7 @@ func (m *chatModel) View() string {
 			verb = "use " + a.tool + " on"
 		}
 		b.WriteString(styleQuestion.Render(fmt.Sprintf("? Allow %s to %s %s from this machine?",
-			orNone(agentclient.Clean(a.agent)), verb, agentclient.Clean(a.url))) + "\n")
+			agentName(a.agent), verb, agentclient.Clean(a.url))) + "\n")
 		b.WriteString(fmt.Sprintf("  [y] this session   [a] always for %s   [n] no\n", agentclient.Clean(a.host)))
 	}
 	if m.capture != nil {
