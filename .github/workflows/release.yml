@@ -11,8 +11,10 @@ jobs:
   binaries:
     # macOS: codesign and notarytool exist only there. Go cross-compiles every other platform from it.
     runs-on: macos-14
-    # Signing keys and the tap App's key are secrets of this environment, which only v* tags (created
-    # by admins only) may use - never repo secrets, which any branch's workflow could read.
+    # Signing keys and the tap App's key are secrets of this environment - never repo secrets, which any
+    # branch's workflow could read. Only v* tags may use it, and only once a code owner other than the person
+    # who pushed the tag approves the run: the tagged commit's own release.yml is what runs, so the approver
+    # checks the tag points at a commit on main.
     environment: release
     permissions:
       contents: write     # the GitHub release
@@ -90,6 +92,8 @@ jobs:
         run: scripts/macos-keychain.sh delete
 
   image:
+    # After the approved, signed binaries: a tag nobody approved publishes nothing.
+    needs: binaries
     runs-on: ubuntu-latest
     permissions:
       contents: read
