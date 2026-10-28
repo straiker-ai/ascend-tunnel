@@ -49,6 +49,27 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  # The parsers that take input from the network, the policy file and --allow, under Go's native fuzzer
+  # for 30s each. Their seed corpora already run in `go test`; this explores beyond them.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: fuzz
+        run: |
+          for target in \
+            internal/agenthost/token:FuzzVerifySession \
+            internal/agenthost/stream:FuzzSSEParser \
+            internal/agenthost/policy:FuzzParse \
+            internal/config:FuzzParseForwards; do
+            go test "./${target%%:*}" -run '^$' -fuzz "^${target#*:}\$" -fuzztime 30s
+          done
+
   # The release, minus publishing: every archive, package and manifest still builds.
   snapshot:
     runs-on: ubuntu-latest

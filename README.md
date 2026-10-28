@@ -365,6 +365,7 @@ One JSON object per line, also printed to stdout:
 
 ```sh
 go test -race ./...
+go test ./internal/agenthost/token -run '^$' -fuzz FuzzVerifySession   # or any Fuzz* target; CI runs each 30s
 goreleaser release --snapshot --clean --skip=publish   # every archive, package and manifest
 ```
 
