@@ -373,6 +373,17 @@ goreleaser release --snapshot --clean --skip=publish   # every archive, package 
 
 ### Releasing
 
+A release candidate first, then the release, both from the same commit on `main`:
+
+1. Tag `vX.Y.Z-rc.1`. It publishes a GitHub pre-release (never "Latest") and the image `X.Y.Z-rc.1`, and
+   leaves Homebrew alone. Check a macOS binary from it:
+   `codesign -vvvv -R="notarized" --check-notarization ascend-tunnel` says the requirement is satisfied.
+   Something wrong: fix it on `main` and tag `-rc.2`.
+2. Tag `vX.Y.Z` on the same commit. It publishes the release ("Latest"), the images `X.Y.Z` and `X.Y`, and the
+   Homebrew casks.
+
+A published release never changes and a tag never moves, so a fix after the release is the next patch version.
+
 Push a `v*` tag on a commit on `main` (anyone with write access can; nobody can move or delete one). It releases
 both binaries, `ascend-tunnel` and `ascend-agent`, signed the same way. The run waits until a code owner other than
 the tag's author approves it, then `.github/workflows/release.yml` builds on a macOS runner and reads its

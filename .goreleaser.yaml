@@ -167,6 +167,9 @@ release:
   # Immutable releases: everything goes up to a draft; release.yml publishes it last, and then it cannot change.
   draft: true
   replace_existing_draft: true
+  # A tag with a pre-release part (v1.2.3-rc.1) is published as a GitHub pre-release: never "Latest", so
+  # /releases/latest and download links stay on the last formal release.
+  prerelease: auto
   # OpenVEX: findings a scanner reports that do not apply, and why (trivy --vex <file>).
   extra_files:
     - glob: .vex/*.openvex.json
