@@ -1,0 +1,6 @@
+# OSV findings that don't apply, for scanners that read this file (OSV-Scanner, OpenSSF Scorecard's
+# Vulnerabilities check). Keep it in step with .vex/ascend-tunnel.openvex.json, the record for everyone else.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "golang.org/x/crypto/openpgp is never linked: both binaries use x/crypto/ssh and its dependencies only (go list -deps), and govulncheck finds no reachable call. No fixed x/crypto exists; the advisory covers the openpgp packages in every version."
