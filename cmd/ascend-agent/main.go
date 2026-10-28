@@ -1,6 +1,6 @@
 // Command ascend-agent is the local half of the Straiker Ascend Agent: an MCP server on a machine inside the customer's
 // network that serves tools to Straiker's cloud agents over one outbound HTTPS connection, under a
-// policy the customer owns. See docs/ascend-agent.md. Experimental: not part of a release yet.
+// policy the customer owns. See docs/ascend-agent.md. Experimental.
 package main
 
 import (

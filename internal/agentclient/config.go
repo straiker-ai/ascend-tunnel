@@ -209,8 +209,8 @@ func (c *Client) Whoami(ctx context.Context) (*Me, error) {
 	return &m, nil
 }
 
-// TargetEnv is where login signs in: prod, unless the config file names another env (Straiker's own testing:
-// {"env": "dev"}), and that env's gateway unless the file names one (a stand-in).
+// TargetEnv is where login signs in: prod, unless the config file names another env, and that env's gateway
+// unless the file names one (a stand-in).
 func TargetEnv() (env, gateway string, err error) {
 	c, err := readConfig()
 	if err != nil {

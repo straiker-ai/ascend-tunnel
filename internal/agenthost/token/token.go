@@ -178,8 +178,7 @@ func VerifySession(tok string, keys []ed25519.PublicKey, want Expect, now time.T
 	return &s, nil
 }
 
-// MintSession signs a session token as Straiker does. Straiker's own signer lives in its session
-// broker; this one exists for tests and for a local stand-in API.
+// MintSession signs a session token in the format Straiker issues, for tests and a local stand-in API.
 func MintSession(priv ed25519.PrivateKey, s Session) (string, error) {
 	input, err := signingInput(header{Alg: Alg, Typ: "JWT"}, s)
 	if err != nil {

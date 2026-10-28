@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Version names this protocol revision. It is provisional until Straiker's agent API ships.
+// Version names this protocol revision; testdata/agent-contract.json pins it.
 const Version = "agent/v0"
 
 // Paths under the agent API base.
@@ -47,7 +47,7 @@ const (
 	MaxCallTime       = 300 * time.Second
 )
 
-// DefaultBase is the agent API base per Straiker environment. Provisional, like Version.
+// DefaultBase is the agent API base per Straiker environment.
 var DefaultBase = map[string]string{
 	"prod":  "https://ascendai-bridge.prod.straiker.ai/agent/v1",
 	"stage": "https://ascendai-bridge.stage.straiker.ai/agent/v1",

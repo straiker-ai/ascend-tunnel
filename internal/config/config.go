@@ -31,7 +31,7 @@ var Environments = map[string]Environment{
 		Relay:   "wss://ascendai-bridge.prod.straiker.ai/tunnel",
 		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOo1Og0g1ySNPvGcpekTrxnLXVc2+2QJ5n3aisivR4X2",
 	},
-	// Straiker's own testing; customers stay on prod.
+	// Non-production environments; customers use prod.
 	"stage": {
 		Relay:   "wss://ascendai-bridge.stage.straiker.ai/tunnel",
 		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKGHd3fIQ4SHvPRrgykwvRGdm1GmeUMhx2JecwNobxhn",
