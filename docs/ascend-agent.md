@@ -5,10 +5,8 @@
 The agents (their prompts, models and reasoning) run in Straiker's cloud. The host only runs the narrow,
 named tools you enable, against the targets you name.
 
-> **Status: experimental, not released.** It is not in the release pipeline, the packages or the
-> Docker image, and Straiker's agent API that it connects to is not deployed yet. The protocol
-> (`agent/v0`, pinned in [`testdata/agent-contract.json`](../testdata/agent-contract.json)) may change.
-> `ascend-tunnel` is unaffected: separate binary, same module, no shared code changed.
+> **Status: experimental.** The protocol (`agent/v0`, pinned in
+> [`testdata/agent-contract.json`](../testdata/agent-contract.json)) may change between releases.
 
 ```
 Straiker cloud agent ──► Straiker agent API ◄──── outbound HTTPS (SSE + POST) ──── ascend-agent ──► your targets
@@ -28,7 +26,7 @@ Straiker cloud agent ──► Straiker agent API ◄──── outbound HTTPS
 ## The safety model
 
 - **Outbound only, no listening port.** The host dials out to Straiker's agent API on 443
-  (`https://ascendai-bridge.<env>.straiker.ai/agent/v1`, the host ascend-tunnel already reaches, so one
+  (`https://ascendai-bridge.prod.straiker.ai/agent/v1`, the host ascend-tunnel already reaches, so one
   egress rule covers both), through
   `HTTPS_PROXY` if set, trusting the system store plus an optional `ca_file`. Nothing on your network
   can call its tools.
@@ -57,14 +55,11 @@ Straiker cloud agent ──► Straiker agent API ◄──── outbound HTTPS
 | `net.check` | TCP connect to a target and, for https, a TLS handshake, reporting whether the certificate verifies; sends no request |
 | `http.probe` | one GET to a path under a target, with no cookies or credentials: status, selected headers, title, up to 256 KiB of text |
 
-Planned, not built: `capture.har` (a browser capture, for the adaptor builder), proxying your own
-MCP servers as upstream tools, and the interactive agent shell.
-
 ## Policy
 
 ```yaml
 org: "1234"                       # your Straiker org id
-env: prod                         # prod | stage | dev (or api: <agent API base URL>)
+env: prod                         # or api: <agent API base URL>
 session_key: "<the key Straiker publishes for your environment>"
 # session_keys: ["<next key>"]   # during a rotation, both verify
 # ca_file: /etc/ssl/corp-proxy.pem
@@ -76,7 +71,8 @@ targets:                          # what tools may reach; the cloud only ever se
 packs: [env, net, http]           # tool packs to turn on
 
 agents:                           # which Straiker agent may call what: <pack>.<tool> or <pack>.*
-  adaptor-builder: [env.info, net.check, http.probe]
+  ascend: [env.info, net.check]                       # Ascend Agent itself
+  adaptor-builder: [env.info, net.check, http.probe]  # the adaptor builder, during a build
 
 limits: { concurrent_calls: 4, calls_per_minute: 120 }
 # audit: { file: /var/log/straiker/ascend-agent-audit.jsonl }
@@ -92,9 +88,11 @@ ascend-agent policy show  -policy ascend-agent.yaml   # targets, tools, what eac
 
 ## Running it
 
-```bash
-go build -o ascend-agent ./cmd/ascend-agent
+Install it with `brew install straiker-ai/tap/ascend-agent` (which installs `ascend-tunnel` too), or
+download it from [Releases](https://github.com/straiker-ai/ascend-tunnel/releases), or
+`go build -o ascend-agent ./cmd/ascend-agent`. Then:
 
+```bash
 ascend-agent key                          # this machine's key (the tunnel's), to enrol the host
 ascend-agent run -policy ascend-agent.yaml        # serve Straiker's cloud agents
 ascend-agent serve -stdio -policy ascend-agent.yaml   # the same tools over stdio, for an MCP inspector
@@ -117,8 +115,6 @@ ascend-agent           # talk; approve sites when an agent first wants to reach 
 
 `login` keeps the token in `~/.ascend-agent/config.json` (mode 0600), with the environment, org and user it signs
 in as, and pins Straiker's session key on first use. `STRAIKER_API_KEY` overrides the saved token for scripts.
-It signs in to prod. For Straiker's own testing, put `{"env": "dev"}` (or `stage`) in that file before `login`;
-logout keeps it, so later logins go there too.
 
 `ascend-agent` enrols this machine for your org the first time (it asks), and serves the agents' tools while it
 runs. With no policy file, nothing is reachable until you approve it: the first time an agent wants a site, the
@@ -142,7 +138,7 @@ browser's DevTools and attach it with `/har`.
 
 ### Your Ascend data
 
-Ask about your assessments ("how have the runs on my chattie app been trending?") and the agent reads them through
+Ask about your assessments ("how have the runs on my support-bot app been trending?") and the agent reads them through
 this machine, with your own login: the `ascend` tools make fixed, read-only calls to Straiker's API (your
 applications, an application's runs, one run). The cloud sends only ids, and your token never leaves this
 machine, so the agent sees exactly what you can.
@@ -167,10 +163,9 @@ interactive:
 `ascend-agent run` serves the same tools unattended. Nobody is there to approve anything, so it reaches only
 the file's targets.
 
-## The protocol (agent/v0, provisional)
+## The protocol (agent/v0)
 
-Pinned in [`testdata/agent-contract.json`](../testdata/agent-contract.json); Straiker's agent API checks
-the same file.
+Pinned in [`testdata/agent-contract.json`](../testdata/agent-contract.json).
 
 - `GET {base}/stream`: Server-Sent Events. `event: call` carries an envelope
   `{sid, call_id, session_jwt, timeout_ms?, message}` where `message` is an MCP JSON-RPC message;
@@ -203,5 +198,5 @@ the same file.
 | `internal/agenthost/token` | host tokens (minted with the machine key) and session tokens (verified) |
 | `internal/agenthost/netx` | TLS and proxy settings |
 
-It reuses `internal/identity` (the machine key) and `internal/agent`'s audit log unchanged, and adds
-no dependency: `go.mod` and `go.sum` are untouched.
+It reuses `internal/identity` (the machine key) and `internal/agent`'s audit log, so the host and the
+tunnel share one identity and one audit format.

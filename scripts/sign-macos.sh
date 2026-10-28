@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sign and notarize one darwin binary (a goreleaser post-build hook: sign-macos.sh <path> <os>), as
-# straiker-ai/sentry does: codesign with the Developer ID Application identity in the keychain
+# Sign and notarize one darwin binary (a goreleaser post-build hook: sign-macos.sh <path> <os>):
+# codesign with the Developer ID Application identity in the keychain
 # (scripts/macos-keychain.sh), hardened runtime and a secure timestamp, then notarytool with an Apple ID and an
 # app-specific password. A bare binary cannot carry a stapled ticket; Gatekeeper looks the notarization up online.
 #
@@ -39,7 +39,7 @@ if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ] || [ -z "${APPLE_APP_PA
 fi
 
 # notarytool's --timeout bounds Apple's processing, not a stalled upload, so each attempt also has a hard cap
-# (sentry saw uploads from GitHub runners wedge until the job's 6 h limit).
+# (uploads from GitHub runners have been seen to wedge until the job's 6 h limit).
 zip="$(mktemp -d)/$name.zip"
 ditto -c -k --keepParent "$bin" "$zip"
 out=$(mktemp)

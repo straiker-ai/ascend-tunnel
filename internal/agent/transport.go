@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -69,12 +69,17 @@ func relayProxy(relay string) string {
 	return ""
 }
 
-// redact drops any userinfo (a proxy password) before a URL reaches a log.
+// redact drops any userinfo (a proxy password) before a URL reaches a log. It doesn't parse: a password
+// with a character URLs reserve (#, ? or /) makes url.Parse fail or split in the wrong place, and the
+// raw string must not leak then either. Everything before the last "@" is userinfo.
 func redact(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil || u.User == nil {
+	scheme, rest := "", raw
+	if i := strings.Index(raw, "://"); i >= 0 {
+		scheme, rest = raw[:i+3], raw[i+3:]
+	}
+	at := strings.LastIndex(rest, "@")
+	if at < 0 {
 		return raw
 	}
-	u.User = url.User("redacted")
-	return u.String()
+	return scheme + "redacted@" + rest[at+1:]
 }

@@ -7,6 +7,8 @@ project_name: ascend-tunnel
 before:
   hooks:
     - go mod verify
+    # The license and NOTICE texts of everything linked in, shipped in every archive and package.
+    - sh scripts/third-party-notices.sh THIRD_PARTY_NOTICES ./cmd/ascend-tunnel ./cmd/ascend-agent
 
 builds:
   - id: ascend-tunnel
@@ -50,7 +52,7 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, README.md, config.example.yaml]
+    files: [LICENSE, THIRD_PARTY_NOTICES, README.md, config.example.yaml]
   - id: ascend-agent
     ids: [ascend-agent]
     formats: [tar.gz]
@@ -58,7 +60,7 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "ascend-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, docs/ascend-agent.md]
+    files: [LICENSE, THIRD_PARTY_NOTICES, docs/ascend-agent.md]
 
 checksum:
   name_template: checksums.txt
@@ -83,12 +85,21 @@ nfpms:
     contents:
       - src: packaging/ascend-tunnel.service
         dst: /usr/lib/systemd/system/ascend-tunnel.service
+      - src: LICENSE
+        dst: /usr/share/doc/ascend-tunnel/LICENSE
+      - src: THIRD_PARTY_NOTICES
+        dst: /usr/share/doc/ascend-tunnel/THIRD_PARTY_NOTICES
       - src: config.example.yaml
         dst: /etc/straiker/agent.yaml
         type: config|noreplace
         file_info:
           mode: 0644
 
+# Homebrew: one cask per binary in straiker-ai/homebrew-tap (brew install straiker-ai/tap/ascend-tunnel,
+# .../ascend-agent); ascend-agent's depends on ascend-tunnel's. Both carry the release's version.
+# Generated only (dist/homebrew/Casks): release.yml pushes them to the tap after it publishes the
+# release (scripts/publish-casks.sh), since a cask pushed here would point at a draft release's
+# downloads, which 404 until publish - and forever if the job fails before it.
 homebrew_casks:
   - name: ascend-tunnel
     ids: [ascend-tunnel]
@@ -98,8 +109,20 @@ homebrew_casks:
     repository:
       owner: straiker-ai
       name: homebrew-tap
-      token: "{{ .Env.PACKAGES_TOKEN }}"
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    skip_upload: true
+  - name: ascend-agent
+    ids: [ascend-agent]
+    homepage: https://github.com/straiker-ai/ascend-tunnel/blob/main/docs/ascend-agent.md
+    description: Serves tools to Straiker's cloud agents, under a policy you own
+    license: Apache-2.0
+    # Ascend Agent sets up the tunnel for a local app, so installing it brings ascend-tunnel too (on PATH,
+    # beside it in Homebrew's bin). The tunnel still installs alone, for a server that only tunnels.
+    dependencies:
+      - cask: straiker-ai/tap/ascend-tunnel
+    repository:
+      owner: straiker-ai
+      name: homebrew-tap
+    skip_upload: true
 
 scoops:
   - name: ascend-tunnel
@@ -110,8 +133,9 @@ scoops:
     repository:
       owner: straiker-ai
       name: scoop-bucket
-      token: "{{ .Env.PACKAGES_TOKEN }}"
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    # Generated only: straiker-ai/scoop-bucket doesn't exist yet, and an upload here would point at the
+    # draft release (see homebrew_casks). Publish it after the release, as the casks are, once it does.
+    skip_upload: true
 
 winget:
   - name: AscendTunnel
@@ -126,14 +150,15 @@ winget:
       owner: straiker-ai
       name: winget-pkgs
       branch: "ascend-tunnel-{{ .Version }}"
-      token: "{{ .Env.PACKAGES_TOKEN }}"
       pull_request:
         enabled: true
         base:
           owner: microsoft
           name: winget-pkgs
           branch: master
-    skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
+    # Generated only: the straiker-ai/winget-pkgs fork doesn't exist yet, and the PR would point at the
+    # draft release (see homebrew_casks). Publish it after the release, as the casks are, once it does.
+    skip_upload: true
 
 release:
   github:
@@ -142,6 +167,9 @@ release:
   # Immutable releases: everything goes up to a draft; release.yml publishes it last, and then it cannot change.
   draft: true
   replace_existing_draft: true
+  # A tag with a pre-release part (v1.2.3-rc.1) is published as a GitHub pre-release: never "Latest", so
+  # /releases/latest and download links stay on the last formal release.
+  prerelease: auto
   # OpenVEX: findings a scanner reports that do not apply, and why (trivy --vex <file>).
   extra_files:
     - glob: .vex/*.openvex.json

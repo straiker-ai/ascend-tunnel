@@ -88,7 +88,8 @@ func TestContract(t *testing.T) {
 	eq(t, "default_base", wire.DefaultBase, c.DefaultBase)
 	eq(t, "events", map[string]string{"call": wire.EventCall, "close": wire.EventClose, "ping": wire.EventPing}, c.Events)
 	eq(t, "params", map[string]string{"after": wire.ParamAfter, "wait": wire.ParamWait}, c.Params)
-	eq(t, "headers", map[string]string{"last_event_id": wire.HeaderLastEventID, "protocol": wire.HeaderProtocol}, c.Headers)
+	eq(t, "headers", map[string]string{"last_event_id": wire.HeaderLastEventID, "protocol": wire.HeaderProtocol,
+		"instance": wire.HeaderInstance}, c.Headers)
 	secs := func(d time.Duration) int { return int(d / time.Second) }
 	eq(t, "timing_s", map[string]int{
 		"heartbeat_interval": secs(wire.HeartbeatInterval), "first_byte_timeout": secs(wire.FirstByteTimeout),

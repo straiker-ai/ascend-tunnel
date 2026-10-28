@@ -48,7 +48,7 @@ func (e *APIError) Error() string {
 
 // Client calls the gateway as one user. Safe for concurrent use.
 type Client struct {
-	Base string // the gateway, e.g. https://api.dev.straiker.ai
+	Base string // the gateway, e.g. https://api.prod.straiker.ai
 	PAT  string
 	HTTP *http.Client
 

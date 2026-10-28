@@ -75,16 +75,25 @@ func TestHostNamesAreWhatEnrolmentAccepts(t *testing.T) {
 }
 
 func TestAppIDsAreConsoleUUIDs(t *testing.T) {
-	if !appIDRE.MatchString("01a16263-de1f-7754-bd60-490a7cf2945f") || appIDRE.MatchString("aapp_6s7KARgl52Ogs18VJyQKRc") {
+	if !appIDRE.MatchString("00000000-0000-7000-8000-000000000001") || appIDRE.MatchString("aapp_TestApp0000000000002") {
 		t.Error("an app id is the uuid the console shows")
+	}
+}
+
+func TestTheAskingAgentIsNamed(t *testing.T) {
+	for id, want := range map[string]string{"ascend": "Ascend Agent", "adaptor-builder": "the adaptor builder",
+		"other\x1b[31m": "other"} {
+		if got := agentName(id); got != want {
+			t.Errorf("agentName(%q) = %q, want %q", id, got, want)
+		}
 	}
 }
 
 func TestApprovalsAnswerWithOneKey(t *testing.T) {
 	m := newChatModel(context.Background(), nil, chatConfig{org: "1"})
 	reply := make(chan approval, 1)
-	m.Update(approvalMsg{agent: "adaptor-builder", tool: "http.probe", url: "https://www.sharkninja.com/", host: "www.sharkninja.com", reply: reply})
-	if v := m.View(); !strings.Contains(v, "Allow adaptor-builder to read https://www.sharkninja.com/") || !strings.Contains(v, "[a] always") {
+	m.Update(approvalMsg{agent: "adaptor-builder", tool: "http.probe", url: "https://www.example.com/", host: "www.example.com", reply: reply})
+	if v := m.View(); !strings.Contains(v, "Allow the adaptor builder to read https://www.example.com/") || !strings.Contains(v, "[a] always") {
 		t.Fatalf("view: %q", v)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}) // other keys type as usual

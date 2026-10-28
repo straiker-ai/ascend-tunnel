@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Create or delete the throwaway keychain a macOS release job signs from, so the Developer ID private key
-# exists on the runner for one job and nowhere else (the recipe straiker-ai/sentry ships with).
+# exists on the runner for one job and nowhere else.
 #
 #   macos-keychain.sh create   # import MACOS_APP_P12; no secret: nothing to do (an unsigned build)
 #   macos-keychain.sh delete   # run it even when the job failed (if: always())

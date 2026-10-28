@@ -8,8 +8,8 @@ import (
 	xterm "github.com/charmbracelet/x/term"
 )
 
-// The Ascend brand, as the POV client draws it (straiker/ascend-agent client/ui.py): the logo's red, the X-oriented
-// star in half blocks, and the "ASCEND" wordmark on a 3x8 grid. The red marks Ascend acting, and nothing else.
+// The Ascend brand: the logo's red, the X-oriented star in half blocks, and the "ASCEND" wordmark on a 3x8
+// grid. The red marks Ascend acting, and nothing else.
 var (
 	brandRed   = lipgloss.Color("#FF5378")
 	styleBrand = lipgloss.NewStyle().Foreground(brandRed)

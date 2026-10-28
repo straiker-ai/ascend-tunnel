@@ -119,8 +119,8 @@ func TestARedirectKeepsBothHops(t *testing.T) {
 }
 
 func TestFormLoginsAreRedacted(t *testing.T) {
-	got := redactBody("username=yg&password=hunter2&otp=123456", "application/x-www-form-urlencoded")
-	if strings.Contains(got, "hunter2") || strings.Contains(got, "123456") || !strings.Contains(got, "username=yg") {
+	got := redactBody("username=alice&password=hunter2&otp=123456", "application/x-www-form-urlencoded")
+	if strings.Contains(got, "hunter2") || strings.Contains(got, "123456") || !strings.Contains(got, "username=alice") {
 		t.Fatal(got)
 	}
 }

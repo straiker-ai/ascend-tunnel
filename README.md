@@ -9,14 +9,15 @@ inbound ports, no VPN, no DNS or cloud changes.
 ```
 Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSocket) ──── ascend-tunnel ──► your app
                                                                          (your network)
-        └──────────────────── TLS end to end, Ascend to your app ────────────────────┘
+        └──────────────── TLS end to end, Ascend to your (HTTPS) app ────────────────┘
 ```
 
 - **Outbound only.** The agent dials out to Straiker's relay on 443, through your proxy if you have
   one. Nothing connects in.
 - **Reaches only what you list.** Each `--allow host[:port]` is one fixed forward; the agent dials
   nothing else, whatever it is asked.
-- **Sees only ciphertext.** TLS runs end to end from Ascend to your app; the agent splices bytes.
+- **Sees only ciphertext, for HTTPS apps.** TLS runs end to end from Ascend to your app; the agent
+  splices bytes. A plain-HTTP app's traffic is carried as it is, inside the encrypted tunnel.
 - **Your key, on your machine.** The agent generates its key on first start and never sends the
   private half anywhere. You authorize it by pasting the public half into your Ascend app.
 - **Every connection logged locally** - when, where, how many bytes - in a JSON-lines audit log.
@@ -25,13 +26,13 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 
 | | |
 |---|---|
-| macOS | `brew install straiker-ai/tap/ascend-tunnel` |
+| macOS | `brew install straiker-ai/tap/ascend-tunnel` (`straiker-ai/tap/ascend-agent` installs [ascend-agent](docs/ascend-agent.md) and the tunnel with it) |
 | Windows | the `.zip` from [Releases](../../releases) |
 | Linux | the `.deb` / `.rpm` from [Releases](../../releases) (installs a systemd service), or the archive |
 | Docker | `docker run ghcr.io/straiker-ai/ascend-tunnel` (see [Running it as a service](#running-it-as-a-service)) |
 | Anything else | the archive for your platform from [Releases](../../releases) - one static binary |
 
-macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). winget and Scoop aren't published yet: they need the `PACKAGES_TOKEN` secret (see `.goreleaser.yaml`).
+macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet. winget and Scoop packages aren't published yet.
 
 ### Verify a download
 
@@ -364,28 +365,13 @@ One JSON object per line, also printed to stdout:
 
 ```sh
 go test -race ./...
+go test ./internal/agenthost/token -run '^$' -fuzz FuzzVerifySession   # or any Fuzz* target; CI runs each 30s
 goreleaser release --snapshot --clean --skip=publish   # every archive, package and manifest
 ```
 
 `testdata/contract.json` pins the names the agent and the relay must derive identically.
 
-### Releasing
-
-Push a `v*` tag. It releases both binaries, `ascend-tunnel` and `ascend-agent`, signed the same way.
-`.github/workflows/release.yml` builds on a macOS runner and reads its credentials from the `release` environment,
-which only `v*` tags may use:
-
-| | Kind | What |
-|---|---|---|
-| `MACOS_APP_P12`, `MACOS_APP_P12_PASSWORD` | secret | Straiker's Developer ID Application certificate, base64 `.p12`, and its password |
-| `APPLE_APP_PASSWORD` | secret | app-specific password of `APPLE_ID`, for `notarytool` |
-| `APPLE_ID`, `APPLE_TEAM_ID` | variable | the Apple ID that notarizes, and Straiker's team id |
-| `JSIGN_*` | secret | Windows Authenticode through a cloud HSM (`scripts/sign-windows.sh`); optional |
-| `PACKAGES_TOKEN` | secret | Homebrew, Scoop and winget manifests; optional |
-
-These are the same certificate and Apple ID that straiker-ai/sentry signs with. A tag fails if macOS signing or
-notarization is missing, rather than publishing binaries Gatekeeper would block. Windows signing stays optional
-until Straiker has an OV code-signing certificate in a cloud HSM.
+Maintainers: how releases are cut, approved and signed is in [docs/releasing.md](docs/releasing.md).
 
 ## License
 

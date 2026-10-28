@@ -121,13 +121,13 @@ func TestTheDefaultNeedsNoFile(t *testing.T) {
 }
 
 func TestApprovalPatterns(t *testing.T) {
-	p, err := Parse([]byte("interactive:\n  allow_hosts: ['*.Example.com', 'chat.vendor.io']\n"))
+	p, err := Parse([]byte("interactive:\n  allow_hosts: ['*.Example.com', 'chat.vendor.example']\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for host, want := range map[string]bool{
 		"example.com": true, "www.example.com": true, "WWW.EXAMPLE.COM.": true, "badexample.com": false,
-		"chat.vendor.io": true, "api.chat.vendor.io": false, "vendor.io": false,
+		"chat.vendor.example": true, "api.chat.vendor.example": false, "vendor.example": false,
 	} {
 		if got := p.MayApprove(host); got != want {
 			t.Errorf("%s: %v", host, got)
@@ -136,7 +136,7 @@ func TestApprovalPatterns(t *testing.T) {
 	if q, _ := Parse([]byte("packs: [env]\n")); q.MayApprove("example.com") || !q.Managed() {
 		t.Error("a policy file allows no approvals unless it says so")
 	}
-	for _, bad := range []string{"'https://x.com'", "'*x.com'", "'x.*'", "'a b'", "''"} {
+	for _, bad := range []string{"'https://a.example'", "'*a.example'", "'x.*'", "'a b'", "''"} {
 		if _, err := Parse([]byte("interactive:\n  allow_hosts: [" + bad + "]\n")); err == nil {
 			t.Errorf("%s must be refused", bad)
 		}
