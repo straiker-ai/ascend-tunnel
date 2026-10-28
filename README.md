@@ -361,8 +361,9 @@ goreleaser release --snapshot --clean --skip=publish   # every archive, package 
 
 ### Releasing
 
-Push a `v*` tag. `.github/workflows/release.yml` builds on a macOS runner and reads its credentials from the
-`release` environment, which only `v*` tags may use:
+Push a `v*` tag. It releases both binaries, `ascend-tunnel` and `ascend-agent`, signed the same way.
+`.github/workflows/release.yml` builds on a macOS runner and reads its credentials from the `release` environment,
+which only `v*` tags may use:
 
 | | Kind | What |
 |---|---|---|

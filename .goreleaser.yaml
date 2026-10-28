@@ -20,7 +20,7 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     hooks:
-      post:
+      post: &sign
         # Authenticode-signs Windows binaries when signing is configured; a no-op otherwise.
         - cmd: sh scripts/sign-windows.sh "{{ .Path }}"
           output: true
@@ -28,6 +28,19 @@ builds:
         # (scripts/macos-keychain.sh); a no-op elsewhere, and a failure on a tag (REQUIRE_MACOS_SIGNING).
         - cmd: bash scripts/sign-macos.sh "{{ .Path }}" "{{ .Os }}"
           output: true
+  # The person's terminal for Ascend Agent; signed like the tunnel agent.
+  - id: ascend-agent
+    main: ./cmd/ascend-agent
+    binary: ascend-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    hooks:
+      post: *sign
 
 archives:
   - id: ascend-tunnel
@@ -38,6 +51,14 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files: [LICENSE, README.md, config.example.yaml]
+  - id: ascend-agent
+    ids: [ascend-agent]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "ascend-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, docs/ascend-agent.md]
 
 checksum:
   name_template: checksums.txt

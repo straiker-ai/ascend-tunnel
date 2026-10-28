@@ -1,0 +1,110 @@
+{
+  "comment": "The ascend-agent wire protocol (agent/v0, provisional). Straiker's agent API must check this same file; a change here lands on both sides.",
+  "protocol": "agent/v0",
+  "paths": {
+    "stream": "/stream",
+    "poll": "/poll",
+    "results": "/results",
+    "hello": "/hello"
+  },
+  "default_base": {
+    "prod": "https://ascendai-bridge.prod.straiker.ai/agent/v1",
+    "stage": "https://ascendai-bridge.stage.straiker.ai/agent/v1",
+    "dev": "https://ascendai-bridge.dev.straiker.ai/agent/v1"
+  },
+  "events": {
+    "call": "call",
+    "close": "close",
+    "ping": "ping"
+  },
+  "params": {
+    "after": "after",
+    "wait": "wait"
+  },
+  "headers": {
+    "last_event_id": "Last-Event-ID",
+    "protocol": "X-Ascend-Agent-Protocol"
+  },
+  "timing_s": {
+    "heartbeat_interval": 15,
+    "first_byte_timeout": 20,
+    "idle_timeout": 45,
+    "poll_wait": 25,
+    "default_call": 120,
+    "max_call": 300
+  },
+  "envelope_fields": [
+    "sid",
+    "call_id",
+    "session_jwt",
+    "timeout_ms",
+    "message"
+  ],
+  "close_fields": [
+    "sid"
+  ],
+  "result_fields": [
+    "sid",
+    "call_id",
+    "message"
+  ],
+  "hello_fields": [
+    "protocol",
+    "host_id",
+    "org",
+    "version",
+    "policy_digest",
+    "tools",
+    "targets"
+  ],
+  "host_token": {
+    "alg": "EdDSA",
+    "aud": "ascend-agent-api",
+    "iss_prefix": "host:",
+    "ttl_s": 300,
+    "claims": [
+      "iss",
+      "sub",
+      "aud",
+      "tenant",
+      "iat",
+      "exp",
+      "jti"
+    ]
+  },
+  "session_token": {
+    "alg": "EdDSA",
+    "iss": "straiker",
+    "aud_prefix": "host:",
+    "max_lifetime_s": 3600,
+    "claims": [
+      "iss",
+      "aud",
+      "tenant",
+      "sid",
+      "agent",
+      "agent_version",
+      "grants",
+      "app_id",
+      "call_id",
+      "msg_sha256",
+      "iat",
+      "exp"
+    ],
+    "call_bound": "call_id and msg_sha256 must equal the envelope's call_id and the digest of its message: one token, one message"
+  },
+  "jsonrpc_errors": {
+    "session_rejected": -32001,
+    "rate_limited": -32002,
+    "host_busy": -32003
+  },
+  "msg_digest": {
+    "rule": "lowercase hex SHA-256 of the message JSON in compact form (no insignificant whitespace), as sent in the envelope; Python: json.dumps(msg, separators=(\",\", \":\"))",
+    "vectors": [
+      {
+        "message": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"http.probe\",\"arguments\":{\"target\":\"support-bot\",\"path\":\"/help?q=caf\\u00e9\"}}}",
+        "sha256": "b0439b566b4e76ef4f1a45fe41d48064612de9c0a875b6a11ad605164acb40ac"
+      }
+    ]
+  }
+}
