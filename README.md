@@ -9,14 +9,15 @@ inbound ports, no VPN, no DNS or cloud changes.
 ```
 Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSocket) ──── ascend-tunnel ──► your app
                                                                          (your network)
-        └──────────────────── TLS end to end, Ascend to your app ────────────────────┘
+        └──────────────── TLS end to end, Ascend to your (HTTPS) app ────────────────┘
 ```
 
 - **Outbound only.** The agent dials out to Straiker's relay on 443, through your proxy if you have
   one. Nothing connects in.
 - **Reaches only what you list.** Each `--allow host[:port]` is one fixed forward; the agent dials
   nothing else, whatever it is asked.
-- **Sees only ciphertext.** TLS runs end to end from Ascend to your app; the agent splices bytes.
+- **Sees only ciphertext, for HTTPS apps.** TLS runs end to end from Ascend to your app; the agent
+  splices bytes. A plain-HTTP app's traffic is carried as it is, inside the encrypted tunnel.
 - **Your key, on your machine.** The agent generates its key on first start and never sends the
   private half anywhere. You authorize it by pasting the public half into your Ascend app.
 - **Every connection logged locally** - when, where, how many bytes - in a JSON-lines audit log.
@@ -379,11 +380,12 @@ which only `v*` tags may use:
 |---|---|---|
 | `MACOS_APP_P12`, `MACOS_APP_P12_PASSWORD` | secret | Straiker's Developer ID Application certificate, base64 `.p12`, and its password |
 | `APPLE_APP_PASSWORD` | secret | app-specific password of `APPLE_ID`, for `notarytool` |
-| `APPLE_ID`, `APPLE_TEAM_ID` | variable | the Apple ID that notarizes, and Straiker's team id |
+| `APPLE_ID` | secret | the Apple ID that notarizes (a secret so the public run logs mask it) |
+| `APPLE_TEAM_ID` | variable | Straiker's Apple team id (public: it is in every signed binary) |
 | `JSIGN_*` | secret | Windows Authenticode through a cloud HSM (`scripts/sign-windows.sh`); optional |
 | `PACKAGES_TOKEN` | secret | Homebrew, Scoop and winget manifests; optional |
 
-These are the same certificate and Apple ID that straiker-ai/sentry signs with. A tag fails if macOS signing or
+A tag fails if macOS signing or
 notarization is missing, rather than publishing binaries Gatekeeper would block. Windows signing stays optional
 until Straiker has an OV code-signing certificate in a cloud HSM.
 

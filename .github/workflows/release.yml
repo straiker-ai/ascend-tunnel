@@ -21,12 +21,13 @@ jobs:
     env:
       # Each credential is optional (the `release` environment's secrets): its step is skipped when absent.
       PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}               # homebrew-tap, scoop-bucket, winget-pkgs fork
-      # macOS, as straiker-ai/sentry signs: the same Developer ID certificate and Apple ID. Required on a tag.
+      # macOS: Straiker's Developer ID certificate, and the Apple ID that notarizes. Required on a tag.
       REQUIRE_MACOS_SIGNING: "1"
       MACOS_APP_P12: ${{ secrets.MACOS_APP_P12 }}                 # Developer ID Application, base64 .p12
       MACOS_APP_P12_PASSWORD: ${{ secrets.MACOS_APP_P12_PASSWORD }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}       # app-specific password, for notarytool
-      APPLE_ID: ${{ vars.APPLE_ID }}
+      # A secret, not a variable: job env is printed in every step's log, and this repo's logs are public.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       JSIGN_STORETYPE: ${{ secrets.JSIGN_STORETYPE }}             # Windows Authenticode via a cloud HSM
       JSIGN_KEYSTORE: ${{ secrets.JSIGN_KEYSTORE }}
