@@ -1,5 +1,5 @@
 {
-  "comment": "The ascend-agent wire protocol (agent/v0, provisional). Straiker's agent API must check this same file; a change here lands on both sides.",
+  "comment": "The ascend-agent wire protocol (agent/v0): the names, shapes and test vectors its contract test checks. A change here is a protocol change.",
   "protocol": "agent/v0",
   "paths": {
     "stream": "/stream",
