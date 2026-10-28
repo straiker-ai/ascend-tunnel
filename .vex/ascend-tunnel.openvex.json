@@ -1,0 +1,21 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/straiker-ai/ascend-tunnel/blob/main/.vex/ascend-tunnel.openvex.json",
+  "author": "Straiker <security@straiker.ai>",
+  "timestamp": "2026-10-28T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "GO-2026-5932"},
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/straiker-ai/ascend-tunnel",
+          "subcomponents": [{"@id": "pkg:golang/golang.org/x/crypto"}]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Neither ascend-tunnel nor ascend-agent links golang.org/x/crypto/openpgp (go list -deps); they use x/crypto/ssh and its dependencies only. Scanners flag the whole module because release binaries are stripped of symbols."
+    }
+  ]
+}

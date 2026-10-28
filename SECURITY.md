@@ -2,7 +2,8 @@
 
 ## Reporting a vulnerability
 
-Report suspected security issues in the Ascend tunnel agent to **security@straiker.ai**.
+Report suspected security issues in the Ascend tunnel agent to **security@straiker.ai**, or
+privately through GitHub ([Report a vulnerability](https://github.com/straiker-ai/ascend-tunnel/security/advisories/new)).
 Include the affected version or commit, a description of the issue, and steps to
 reproduce it.
 

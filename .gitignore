@@ -34,3 +34,6 @@ go.work.sum
 
 # Release output
 dist/
+
+# Local build of the experimental agent host (docs/ascend-agent.md)
+/ascend-agent

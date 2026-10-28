@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, so a vulnerability published after a release surfaces without waiting for a commit.
+  schedule:
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -41,9 +44,10 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: go mod tidy
         run: go mod tidy && git diff --exit-code go.mod go.sum
-      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
-        with:
-          go-version-file: go.mod
+      # With the Go that releases build with (go.mod's toolchain), not the action's "stable": that one scanned
+      # clean while v0.1.5 shipped with 14 standard-library vulnerabilities.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   # The release, minus publishing: every archive, package and manifest still builds.
   snapshot:
@@ -56,10 +60,16 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: "~> v2"
           args: release --snapshot --clean --skip=publish
+      # What a customer's scanner sees: every binary the release would ship, as built, against .vex/.
+      - name: govulncheck the binaries
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          GOVULNCHECK="$(go env GOPATH)/bin/govulncheck" scripts/vulncheck-binaries.sh dist/ascend-*_*/ascend-*
 
   image:
     runs-on: ubuntu-latest

@@ -20,24 +20,27 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     hooks:
-      post:
+      post: &sign
         # Authenticode-signs Windows binaries when signing is configured; a no-op otherwise.
         - cmd: sh scripts/sign-windows.sh "{{ .Path }}"
           output: true
-
-notarize:
-  macos:
-    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-      ids: [ascend-tunnel]
-      sign:
-        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
-        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
-      notarize:
-        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
-        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
-        key: "{{ .Env.MACOS_NOTARY_KEY }}"
-        wait: true
-        timeout: 20m
+        # Developer ID-signs and notarizes darwin binaries on a macOS runner with the keychain set up
+        # (scripts/macos-keychain.sh); a no-op elsewhere, and a failure on a tag (REQUIRE_MACOS_SIGNING).
+        - cmd: bash scripts/sign-macos.sh "{{ .Path }}" "{{ .Os }}"
+          output: true
+  # The person's terminal for Ascend Agent; signed like the tunnel agent.
+  - id: ascend-agent
+    main: ./cmd/ascend-agent
+    binary: ascend-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    hooks:
+      post: *sign
 
 archives:
   - id: ascend-tunnel
@@ -48,9 +51,23 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files: [LICENSE, README.md, config.example.yaml]
+  - id: ascend-agent
+    ids: [ascend-agent]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "ascend-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, docs/ascend-agent.md]
 
 checksum:
   name_template: checksums.txt
+  extra_files:
+    - glob: .vex/*.openvex.json
+
+# An SPDX SBOM per archive (syft), published beside it, in checksums.txt and in the build provenance.
+sboms:
+  - artifacts: archive
 
 nfpms:
   - id: packages
@@ -83,13 +100,6 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.PACKAGES_TOKEN }}"
     skip_upload: '{{ if isEnvSet "PACKAGES_TOKEN" }}false{{ else }}true{{ end }}'
-    # The binary isn't notarized yet; without this macOS kills it on first run (exit 137).
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ascend-tunnel"]
-          end
 
 scoops:
   - name: ascend-tunnel
@@ -129,6 +139,12 @@ release:
   github:
     owner: straiker-ai
     name: ascend-tunnel
+  # Immutable releases: everything goes up to a draft; release.yml publishes it last, and then it cannot change.
+  draft: true
+  replace_existing_draft: true
+  # OpenVEX: findings a scanner reports that do not apply, and why (trivy --vex <file>).
+  extra_files:
+    - glob: .vex/*.openvex.json
   footer: |
     Verify a download: `gh attestation verify <file> --repo straiker-ai/ascend-tunnel`
     and check it against `checksums.txt`.
