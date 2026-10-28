@@ -387,9 +387,8 @@ which only `v*` tags may use:
 | `TAP_APP_CLIENT_ID` | variable | client ID of the tap-publisher GitHub App, installed on straiker-ai/homebrew-tap only with Contents: read and write |
 | `TAP_APP_PRIVATE_KEY` | secret | that App's private key. The job mints a token for homebrew-tap only, to publish the casks after the release. Required on a release tag; prerelease tags (`v1.2.3-rc.1`) never touch the tap |
 
-A tag fails if macOS signing or
-notarization is missing, rather than publishing binaries Gatekeeper would block. Windows signing stays optional
-until Straiker has an OV code-signing certificate in a cloud HSM.
+A tag fails if macOS signing or notarization is missing, rather than publishing binaries Gatekeeper would
+block. Windows signing stays optional until Straiker has an OV code-signing certificate in a cloud HSM.
 
 ## License
 
