@@ -127,7 +127,6 @@ scoops:
     repository:
       owner: straiker-ai
       name: scoop-bucket
-      token: "{{ .Env.PACKAGES_TOKEN }}"
     # Generated only: straiker-ai/scoop-bucket doesn't exist yet, and an upload here would point at the
     # draft release (see homebrew_casks). Publish it after the release, as the casks are, once it does.
     skip_upload: true
@@ -145,7 +144,6 @@ winget:
       owner: straiker-ai
       name: winget-pkgs
       branch: "ascend-tunnel-{{ .Version }}"
-      token: "{{ .Env.PACKAGES_TOKEN }}"
       pull_request:
         enabled: true
         base:
