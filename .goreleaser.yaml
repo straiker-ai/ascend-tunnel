@@ -62,6 +62,12 @@ archives:
 
 checksum:
   name_template: checksums.txt
+  extra_files:
+    - glob: .vex/*.openvex.json
+
+# An SPDX SBOM per archive (syft), published beside it, in checksums.txt and in the build provenance.
+sboms:
+  - artifacts: archive
 
 nfpms:
   - id: packages
@@ -133,6 +139,12 @@ release:
   github:
     owner: straiker-ai
     name: ascend-tunnel
+  # Immutable releases: everything goes up to a draft; release.yml publishes it last, and then it cannot change.
+  draft: true
+  replace_existing_draft: true
+  # OpenVEX: findings a scanner reports that do not apply, and why (trivy --vex <file>).
+  extra_files:
+    - glob: .vex/*.openvex.json
   footer: |
     Verify a download: `gh attestation verify <file> --repo straiker-ai/ascend-tunnel`
     and check it against `checksums.txt`.

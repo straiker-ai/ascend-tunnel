@@ -43,6 +43,7 @@ jobs:
       - name: install jsign
         if: env.JSIGN_STORETYPE != ''
         run: brew install jsign
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - name: create the signing keychain
         run: scripts/macos-keychain.sh create
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
@@ -58,7 +59,13 @@ jobs:
             dist/*.zip
             dist/*.deb
             dist/*.rpm
+            dist/*.sbom.json
             dist/checksums.txt
+      # Last, once every asset and its provenance exist: the repository's immutable releases lock it from here.
+      - name: publish the release
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: delete the signing keychain
         if: always()
         run: scripts/macos-keychain.sh delete
@@ -97,6 +104,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # An SBOM and full build provenance, attached to the image for registry scanners.
+          sbom: true
+          provenance: mode=max
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.commit.outputs.short }}

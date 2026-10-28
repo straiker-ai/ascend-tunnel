@@ -1,5 +1,7 @@
 # ascend-tunnel
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/straiker-ai/ascend-tunnel/badge)](https://scorecard.dev/viewer/?uri=github.com/straiker-ai/ascend-tunnel)
+
 The Straiker Ascend tunnel agent. Run it on any machine inside your network that can reach the AI
 app you want to red-team, and Ascend reaches that app through one outbound HTTPS connection - no
 inbound ports, no VPN, no DNS or cloud changes.
@@ -40,6 +42,14 @@ workflow that built it:
 gh attestation verify ascend-tunnel_<version>_<os>_<arch>.tar.gz --repo straiker-ai/ascend-tunnel
 sha256sum -c checksums.txt --ignore-missing
 ```
+
+Scanners that match whole Go modules report a finding or two that does not apply to these binaries. Each
+release publishes why in `ascend-tunnel.openvex.json` (OpenVEX), which most scanners read:
+`trivy rootfs --vex ascend-tunnel.openvex.json <binary>`.
+
+Each archive has an SPDX SBOM beside it (`<archive>.sbom.json`), and the container image carries an SBOM and
+build provenance as attestations (`docker buildx imagetools inspect ghcr.io/straiker-ai/ascend-tunnel:<version>
+--format '{{ json .SBOM }}'`).
 
 Builds are reproducible. Rebuild a release binary from its tag, with the Go toolchain `go.mod` names,
 and compare checksums:
