@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Tag the head of main for a release started from the Actions tab (release.yml, Run workflow). Runs after the
-# release environment's approval, so no tag exists for a run nobody approved. A tag pushed with the job's own
-# token starts no second run of the workflow.
+# Tag the head of main for the release being run (release.yml, Run workflow). Runs after the release
+# environment's approval, so a run nobody approved leaves no tag.
 #
 #   release-tag.sh <version>     e.g. v1.2.3-rc.1 or v1.2.3
 #

@@ -1,11 +1,9 @@
 name: release
 
-# Two ways to start a release, the same pipeline after: Run workflow in the Actions tab with a version (the
-# workflow tags the head of main once the run is approved), or push a v* tag with git. Never create or publish
-# a release on the Releases page: a published release is immutable, so the files could never be added.
+# The one way to release: Run workflow in the Actions tab, on main, with a version. Once a code owner approves,
+# the workflow tags the head of main and publishes. A tag pushed by hand starts nothing, and a release created on
+# the Releases page can't work: it is immutable from the moment it is published, before any file exists.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -22,17 +20,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The release's tag, however the run started.
-  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  TAG: ${{ inputs.version }}
 
 jobs:
   binaries:
     # macOS: codesign and notarytool exist only there. Go cross-compiles every other platform from it.
     runs-on: macos-14
     # Signing keys and the tap App's key are secrets of this environment - never repo secrets, which any
-    # branch's workflow could read. Only main (Run workflow) and v* tags may use it, and only once a code owner
-    # other than the person who started the run approves it. For a pushed tag, the tagged commit's own
-    # release.yml is what runs, so the approver checks the tag points at a commit on main.
+    # branch's workflow could read. Only main may use it (so this file always runs as reviewed), and only once a
+    # code owner other than the person who started the run approves it.
     environment: release
     permissions:
       contents: write     # the GitHub release
@@ -57,9 +53,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Run workflow: tag the head of main now, after approval.
+      # Tag the head of main now, after approval: a run nobody approved leaves no tag.
       - name: tag main
-        if: github.event_name == 'workflow_dispatch'
         run: scripts/release-tag.sh "$TAG"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
