@@ -5,7 +5,7 @@
 #
 #   publish-casks.sh [tag]   # tag defaults to GITHUB_REF_NAME
 #
-# GH_TOKEN must be able to write homebrew-tap's contents (the release environment's PACKAGES_TOKEN).
+# GH_TOKEN must be able to write homebrew-tap's contents (release.yml mints one from the tap-publisher App).
 # Prerelease tags (v1.2.3-rc.1) publish nothing, so they can test a release without moving brew users.
 set -euo pipefail
 

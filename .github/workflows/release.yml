@@ -11,7 +11,7 @@ jobs:
   binaries:
     # macOS: codesign and notarytool exist only there. Go cross-compiles every other platform from it.
     runs-on: macos-14
-    # Signing keys and the package token are secrets of this environment, which only v* tags (created
+    # Signing keys and the tap App's key are secrets of this environment, which only v* tags (created
     # by admins only) may use - never repo secrets, which any branch's workflow could read.
     environment: release
     permissions:
@@ -19,8 +19,7 @@ jobs:
       id-token: write     # Sigstore signing of the build provenance
       attestations: write
     env:
-      # Each credential is optional (the `release` environment's secrets): its step is skipped when absent.
-      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}               # homebrew-tap, scoop-bucket, winget-pkgs fork
+      # The `release` environment's secrets. Windows signing is optional: skipped when absent.
       # macOS: Straiker's Developer ID certificate, and the Apple ID that notarizes. Required on a tag.
       REQUIRE_MACOS_SIGNING: "1"
       MACOS_APP_P12: ${{ secrets.MACOS_APP_P12 }}                 # Developer ID Application, base64 .p12
@@ -67,13 +66,25 @@ jobs:
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # After publish, so a cask never points at a draft release's downloads (.goreleaser.yaml only generates
-      # them). Prerelease tags skip it.
+      # The release pipeline is the only writer of straiker-ai/homebrew-tap. After publish, so a cask never
+      # points at a draft release's downloads (.goreleaser.yaml only generates them). Required on a release
+      # tag, so a missing App fails the job instead of leaving the tap behind; prerelease tags skip both steps.
+      # The token is the tap-publisher GitHub App's: contents write on homebrew-tap only, for this job only.
+      - name: token for the Homebrew tap
+        id: tap-token
+        if: ${{ !contains(github.ref_name, '-') }}
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: straiker-ai
+          repositories: homebrew-tap
+          permission-contents: write
       - name: publish the Homebrew casks
-        if: env.PACKAGES_TOKEN != ''
+        if: ${{ !contains(github.ref_name, '-') }}
         run: scripts/publish-casks.sh
         env:
-          GH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
       - name: delete the signing keychain
         if: always()
         run: scripts/macos-keychain.sh delete

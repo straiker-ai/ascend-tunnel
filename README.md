@@ -32,7 +32,7 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 | Docker | `docker run ghcr.io/straiker-ai/ascend-tunnel` (see [Running it as a service](#running-it-as-a-service)) |
 | Anything else | the archive for your platform from [Releases](../../releases) - one static binary |
 
-macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). The Homebrew casks are published once the release is (`scripts/publish-casks.sh`, with the `PACKAGES_TOKEN` secret). winget and Scoop manifests are generated but not published yet: their repositories don't exist (see `.goreleaser.yaml`).
+macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). The Homebrew casks are generated and published by the release, once it is published (`scripts/publish-casks.sh`); nobody edits [straiker-ai/homebrew-tap](https://github.com/straiker-ai/homebrew-tap) by hand. winget and Scoop manifests are generated but not published yet: their repositories don't exist (see `.goreleaser.yaml`).
 
 ### Verify a download
 
@@ -384,7 +384,8 @@ which only `v*` tags may use:
 | `APPLE_ID` | secret | the Apple ID that notarizes (a secret so the public run logs mask it) |
 | `APPLE_TEAM_ID` | variable | Straiker's Apple team id (public: it is in every signed binary) |
 | `JSIGN_*` | secret | Windows Authenticode through a cloud HSM (`scripts/sign-windows.sh`); optional |
-| `PACKAGES_TOKEN` | secret | contents write on straiker-ai/homebrew-tap, to publish the casks after the release; optional. Prerelease tags (`v1.2.3-rc.1`) never touch the tap |
+| `TAP_APP_CLIENT_ID` | variable | client ID of the tap-publisher GitHub App, installed on straiker-ai/homebrew-tap only with Contents: read and write |
+| `TAP_APP_PRIVATE_KEY` | secret | that App's private key. The job mints a token for homebrew-tap only, to publish the casks after the release. Required on a release tag; prerelease tags (`v1.2.3-rc.1`) never touch the tap |
 
 A tag fails if macOS signing or
 notarization is missing, rather than publishing binaries Gatekeeper would block. Windows signing stays optional
