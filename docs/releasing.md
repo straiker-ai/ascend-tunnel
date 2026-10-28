@@ -5,26 +5,36 @@ from `.github/workflows/release.yml` and `.goreleaser.yaml`.
 
 ## Steps
 
-A release candidate first, then the release, both from the same commit on `main`:
+**Actions** tab → **release** → **Run workflow** (on `main`) → enter the version → **Run workflow**. A code owner
+other than you approves the run (**Review deployments**); then the workflow tags the head of `main`, builds,
+signs, notarizes and publishes. The release appears on the Releases page by itself.
 
-1. Tag `vX.Y.Z-rc.1`. It publishes a GitHub pre-release (never "Latest") and the image `X.Y.Z-rc.1`, and
-   leaves Homebrew alone. Check a macOS binary from it:
+**Never create or publish a release on the Releases page.** Releases here are immutable: one published there is
+locked before the workflow can add its files, and that version is used up. (Pushing a tag with git works too:
+`git tag -a vX.Y.Z -m vX.Y.Z origin/main && git push origin vX.Y.Z`.)
+
+Normally a release candidate first, then the release, from the same commit:
+
+1. `vX.Y.Z-rc.1`: a GitHub pre-release (never "Latest") and the image `X.Y.Z-rc.1`; Homebrew is left alone.
+   Check a macOS binary from it:
    `codesign -vvvv -R="notarized" --check-notarization ascend-tunnel` says the requirement is satisfied.
-   Something wrong: fix it on `main` and tag `-rc.2`.
-2. Tag `vX.Y.Z` on the same commit. It publishes the release ("Latest"), the images `X.Y.Z` and `X.Y`, and the
-   Homebrew casks.
+   Something wrong: fix it on `main` and run `-rc.2`.
+2. `vX.Y.Z`, with nothing merged since the candidate (so it is the same commit): the release ("Latest"), the
+   images `X.Y.Z` and `X.Y`, and the Homebrew casks.
 
-A published release never changes and a tag never moves, so a fix after the release is the next patch version.
+A published release never changes and a version is never reused, so a fix after the release is the next patch
+version.
 
 ## Who can release
 
-Anyone with write access can push a `v*` tag on a commit on `main`; nobody can move or delete one. The run then
-waits until a code owner other than the tag's author approves it (no admin bypass). Only then does
-`release.yml` build on a macOS runner and read its credentials from the `release` environment, which only `v*`
-tags may use.
+Anyone with write access can start the workflow, or push a `v*` tag; nobody can move or delete a tag. The run
+waits until a code owner other than the person who started it approves (no admin bypass). Only then does
+`release.yml` build on a macOS runner and read its credentials from the `release` environment, which only `main`
+and `v*` tags may use.
 
-The tagged commit's own `release.yml` is what runs, so the approver checks that the tag points at a commit on
-`main` (the approval screen shows it, or `git branch -r --contains <sha>` lists `origin/main`).
+Run workflow always uses `main`'s own `release.yml`. For a pushed tag, the tagged commit's `release.yml` is what
+runs, so the approver checks that the tag points at a commit on `main` (the approval screen shows it, or
+`git branch -r --contains <sha>` lists `origin/main`).
 
 ## Credentials
 

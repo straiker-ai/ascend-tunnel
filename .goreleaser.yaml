@@ -170,6 +170,10 @@ release:
   # A tag with a pre-release part (v1.2.3-rc.1) is published as a GitHub pre-release: never "Latest", so
   # /releases/latest and download links stay on the last formal release.
   prerelease: auto
+  # Stop before building and signing when the release can't be published (e.g. one already exists for the tag
+  # and is immutable), instead of failing at the upload minutes later.
+  preflight:
+    fail_on_error: true
   # OpenVEX: findings a scanner reports that do not apply, and why (trivy --vex <file>).
   extra_files:
     - glob: .vex/*.openvex.json

@@ -1,20 +1,38 @@
 name: release
 
+# Two ways to start a release, the same pipeline after: Run workflow in the Actions tab with a version (the
+# workflow tags the head of main once the run is approved), or push a v* tag with git. Never create or publish
+# a release on the Releases page: a published release is immutable, so the files could never be added.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release from the head of main: v1.2.3-rc.1 for a candidate, v1.2.3 for the release"
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+# One release at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # The release's tag, however the run started.
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
 jobs:
   binaries:
     # macOS: codesign and notarytool exist only there. Go cross-compiles every other platform from it.
     runs-on: macos-14
     # Signing keys and the tap App's key are secrets of this environment - never repo secrets, which any
-    # branch's workflow could read. Only v* tags may use it, and only once a code owner other than the person
-    # who pushed the tag approves the run: the tagged commit's own release.yml is what runs, so the approver
-    # checks the tag points at a commit on main.
+    # branch's workflow could read. Only main (Run workflow) and v* tags may use it, and only once a code owner
+    # other than the person who started the run approves it. For a pushed tag, the tagged commit's own
+    # release.yml is what runs, so the approver checks the tag points at a commit on main.
     environment: release
     permissions:
       contents: write     # the GitHub release
@@ -39,6 +57,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Run workflow: tag the head of main now, after approval.
+      - name: tag main
+        if: github.event_name == 'workflow_dispatch'
+        run: scripts/release-tag.sh "$TAG"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The changelog runs from the previous formal release. Left to itself, goreleaser takes the nearest older
+      # tag, which for a release is its own candidate on the same commit: an empty changelog.
+      - name: previous release
+        run: |
+          base="${TAG%%-*}"   # v1.2.3 for v1.2.3 and for v1.2.3-rc.1
+          prev=$({ git tag -l 'v*' | grep -vF -e -; echo "$base"; } | sort -uV | awk -v b="$base" '$0 == b { print p; exit } { p = $0 }')
+          echo "GORELEASER_PREVIOUS_TAG=$prev" >> "$GITHUB_ENV"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -54,10 +85,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The tag that started this run. A release and its candidate share a commit (docs/releasing.md), and
-          # left to choose, goreleaser takes the highest tag on it - git sorts v1.2.3-rc.1 above v1.2.3 - so the
-          # release would build as, and try to publish into, the candidate's immutable release.
-          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+          # This run's tag. A release and its candidate share a commit (docs/releasing.md), and left to choose,
+          # goreleaser takes the highest tag on it - git sorts v1.2.3-rc.1 above v1.2.3 - so the release would
+          # build as, and try to publish into, the candidate's immutable release.
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -69,7 +100,7 @@ jobs:
             dist/checksums.txt
       # Last, once every asset and its provenance exist: the repository's immutable releases lock it from here.
       - name: publish the release
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The release pipeline is the only writer of straiker-ai/homebrew-tap. After publish, so a cask never
@@ -78,7 +109,7 @@ jobs:
       # The token is the tap-publisher GitHub App's: contents write on homebrew-tap only, for this job only.
       - name: token for the Homebrew tap
         id: tap-token
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.TAP_APP_CLIENT_ID }}
@@ -87,8 +118,8 @@ jobs:
           repositories: homebrew-tap
           permission-contents: write
       - name: publish the Homebrew casks
-        if: ${{ !contains(github.ref_name, '-') }}
-        run: scripts/publish-casks.sh
+        if: ${{ !contains(env.TAG, '-') }}
+        run: scripts/publish-casks.sh "$TAG"
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
       - name: delete the signing keychain
@@ -96,7 +127,7 @@ jobs:
         run: scripts/macos-keychain.sh delete
 
   image:
-    # After the approved, signed binaries: a tag nobody approved publishes nothing.
+    # After the approved, signed binaries: a run nobody approved publishes nothing.
     needs: binaries
     runs-on: ubuntu-latest
     permissions:
@@ -119,8 +150,8 @@ jobs:
         with:
           images: ghcr.io/straiker-ai/ascend-tunnel
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }}
       - id: commit
         run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - id: push
