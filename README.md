@@ -32,7 +32,7 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 | Docker | `docker run ghcr.io/straiker-ai/ascend-tunnel` (see [Running it as a service](#running-it-as-a-service)) |
 | Anything else | the archive for your platform from [Releases](../../releases) - one static binary |
 
-macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet (see [Releasing](#releasing)). The Homebrew casks are generated and published by the release, once it is published (`scripts/publish-casks.sh`); nobody edits [straiker-ai/homebrew-tap](https://github.com/straiker-ai/homebrew-tap) by hand. winget and Scoop manifests are generated but not published yet: their repositories don't exist (see `.goreleaser.yaml`).
+macOS binaries are signed with Straiker's Developer ID and notarized by Apple. Windows binaries aren't Authenticode-signed yet. winget and Scoop packages aren't published yet.
 
 ### Verify a download
 
@@ -371,36 +371,7 @@ goreleaser release --snapshot --clean --skip=publish   # every archive, package 
 
 `testdata/contract.json` pins the names the agent and the relay must derive identically.
 
-### Releasing
-
-A release candidate first, then the release, both from the same commit on `main`:
-
-1. Tag `vX.Y.Z-rc.1`. It publishes a GitHub pre-release (never "Latest") and the image `X.Y.Z-rc.1`, and
-   leaves Homebrew alone. Check a macOS binary from it:
-   `codesign -vvvv -R="notarized" --check-notarization ascend-tunnel` says the requirement is satisfied.
-   Something wrong: fix it on `main` and tag `-rc.2`.
-2. Tag `vX.Y.Z` on the same commit. It publishes the release ("Latest"), the images `X.Y.Z` and `X.Y`, and the
-   Homebrew casks.
-
-A published release never changes and a tag never moves, so a fix after the release is the next patch version.
-
-Push a `v*` tag on a commit on `main` (anyone with write access can; nobody can move or delete one). It releases
-both binaries, `ascend-tunnel` and `ascend-agent`, signed the same way. The run waits until a code owner other than
-the tag's author approves it, then `.github/workflows/release.yml` builds on a macOS runner and reads its
-credentials from the `release` environment, which only `v*` tags may use:
-
-| | Kind | What |
-|---|---|---|
-| `MACOS_APP_P12`, `MACOS_APP_P12_PASSWORD` | secret | Straiker's Developer ID Application certificate, base64 `.p12`, and its password |
-| `APPLE_APP_PASSWORD` | secret | app-specific password of `APPLE_ID`, for `notarytool` |
-| `APPLE_ID` | secret | the Apple ID that notarizes (a secret so the public run logs mask it) |
-| `APPLE_TEAM_ID` | variable | Straiker's Apple team id (public: it is in every signed binary) |
-| `JSIGN_*` | secret | Windows Authenticode through a cloud HSM (`scripts/sign-windows.sh`); optional |
-| `TAP_APP_CLIENT_ID` | variable | client ID of the tap-publisher GitHub App, installed on straiker-ai/homebrew-tap only with Contents: read and write |
-| `TAP_APP_PRIVATE_KEY` | secret | that App's private key. The job mints a token for homebrew-tap only, to publish the casks after the release. Required on a release tag; prerelease tags (`v1.2.3-rc.1`) never touch the tap |
-
-A tag fails if macOS signing or notarization is missing, rather than publishing binaries Gatekeeper would
-block. Windows signing stays optional until Straiker has an OV code-signing certificate in a cloud HSM.
+Maintainers: how releases are cut, approved and signed is in [docs/releasing.md](docs/releasing.md).
 
 ## License
 
