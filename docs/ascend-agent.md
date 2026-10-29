@@ -54,6 +54,10 @@ Straiker cloud agent ──► Straiker agent API ◄──── outbound HTTPS
 | `env.info` | version, platform, target ids, tools served, policy digest, whether a proxy is used |
 | `net.check` | TCP connect to a target and, for https, a TLS handshake, reporting whether the certificate verifies; sends no request |
 | `http.probe` | one GET to a path under a target, with no cookies or credentials: status, selected headers, title, up to 256 KiB of text |
+| `ascend.apps`, `ascend.runs`, `ascend.run` | your Ascend applications and assessment runs, read with your own login |
+| `ascend.app_create` | creates an Ascend application with your own login, only after you confirm in the terminal; returns the applications already on that endpoint or name instead of a duplicate. Offered only in `ascend-agent` chat, and only to Ascend Agent (not the builder) |
+| `ascend.app_adaptor` | stores an adaptor on one of your applications with your own login (in its request template, under `_adaptor_src`), only after you confirm in the terminal; refuses if the application's name doesn't match, and checks that Straiker kept it. Ascend Agent sends only what the adaptor builder proposed and tested. Offered only in `ascend-agent` chat, and only to Ascend Agent |
+| `tunnel.open` | lets Straiker reach an app only your network reaches, through this machine, while `ascend-agent` runs (ascend-tunnel built in, with this machine's key), only after you confirm in the terminal; returns the tunnel endpoint and agent key for the application. Offered only in `ascend-agent` chat, only to Ascend Agent, and only within the policy's `interactive.allow_hosts` |
 
 ## Policy
 
@@ -68,7 +72,7 @@ targets:                          # what tools may reach; the cloud only ever se
   support-bot: { url: "https://support.corp.example/" }
   intranet-api: { url: "http://10.0.0.5:8080/api/" }
 
-packs: [env, net, http]           # tool packs to turn on
+packs: [env, net, http]           # tool packs to turn on (env, net, http, browser, ascend, tunnel)
 
 agents:                           # which Straiker agent may call what: <pack>.<tool> or <pack>.*
   ascend: [env.info, net.check]                       # Ascend Agent itself
@@ -144,6 +148,39 @@ Ask about your assessments ("how have the runs on my support-bot app been trendi
 this machine, with your own login: the `ascend` tools make fixed, read-only calls to Straiker's API (your
 applications, an application's runs, one run). The cloud sends only ids, and your token never leaves this
 machine, so the agent sees exactly what you can.
+
+### Connecting an application
+
+Say `connect <your chat API's URL> as <name>`. Ascend Agent looks for an application already on that endpoint and
+offers it; otherwise it works out the request and asks you to confirm before anything is created:
+
+```text
+? Allow Ascend Agent to create the Ascend application "support-bot" for https://chat.example.com/v1/chat in org 1 (small, 30 queries a minute, 42 controls)?
+  [y] yes   [n] no
+```
+
+If the API needs a key, you type it at a masked prompt in the terminal: it goes to Straiker with the application,
+and Ascend Agent never sees it. `/apps` lists your applications without asking the agent.
+
+Ascend Agent checks the endpoint first. A known agent platform (Salesforce Agentforce, Amazon Bedrock, Azure AI
+Foundry, Google Cloud, Copilot Studio, ChatGPT) goes to its Straiker Defend onboarding page instead. An endpoint
+Straiker's cloud cannot reach (an internal name, or private addresses only) needs a tunnel, and Ascend Agent offers
+one through this machine, with nothing else to install:
+
+```text
+? Allow Ascend Agent to let Straiker's cloud reach chat.corp.internal:443 through this machine while ascend-agent runs (org 1)?
+  [y] yes   [n] no
+```
+
+The application is then created on the tunnel's address with this machine's key. While a tunnel is open, the status
+bar shows it (`⇄ chat.corp.internal:443`); `/tunnel` lists what Straiker reaches through this machine and how many
+connections it made, and `/tunnel close` (or `/tunnel close <host>`) stops it at once. The tunnel runs only while
+`ascend-agent` does; when you leave, it prints the command that keeps it running as a service, with the same key
+(so the application keeps working): `ascend-tunnel service install --org 1 --allow chat.corp.internal:443`.
+
+If the API needs more than one plain request per message (a login step, a session id carried between turns, a
+streamed reply), the adaptor builder writes an adaptor for it, and Ascend Agent offers to store it on the application;
+you confirm, and it runs one conversation through the stored adaptor to check.
 
 ### Your organisation's daily budget
 

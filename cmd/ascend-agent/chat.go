@@ -101,6 +101,7 @@ func chat(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	ap := &termApprover{org: s.org, api: api}
 	mode := "served by ascend-agent run: approvals off"
 	if !online {
+		ap.tun = newTunnels(hctx, s, id)
 		h, err := newHost(s, id, agent.NewAudit(s.auditLog, io.Discard), ap)
 		if err != nil {
 			fmt.Fprintln(stderr, "ascend-agent:", err)
@@ -118,7 +119,7 @@ func chat(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	m := newChatModel(ctx, api, chatConfig{
 		hostID: id.AgentID, hostMode: mode, env: s.env, resume: resume, targets: s.pol.TargetIDs(),
 		user: cfg.User, org: s.org, policyPath: s.policyPath, approvals: !online && len(s.pol.Interactive.AllowHosts) > 0,
-		allowHosts: s.pol.Interactive.AllowHosts, budget: me.Budget,
+		allowHosts: s.pol.Interactive.AllowHosts, budget: me.Budget, tun: ap.tun,
 	})
 	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout))
 	ap.setSend(p.Send)
@@ -130,6 +131,12 @@ func chat(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	}
 	if cm, ok := final.(*chatModel); ok && cm.sid != "" && !cm.ended {
 		fmt.Fprintf(stdout, "The session continues in the cloud for a while; reattach with:\n  ascend-agent -resume %s\n", cm.sid)
+	}
+	if ap.tun != nil {
+		if allow := ap.tun.close(); len(allow) > 0 {
+			fmt.Fprintf(stdout, "The tunnel to %s stopped with ascend-agent. To keep it running for assessments:\n  %s\n",
+				strings.Join(allow, ", "), ap.tun.keepCommand(allow))
+		}
 	}
 	return 0
 }
@@ -358,6 +365,7 @@ type termApprover struct {
 	send      func(tea.Msg)
 	capturing bool
 	session   map[string]bool // sites allowed for this session ([y]); [a] keeps them in sites.json
+	tun       *tunnels        // tunnel.open's, while this chat serves the host
 }
 
 // Capture opens a visible browser with Ascend's own profile at u and records what the person does in it. It
@@ -395,12 +403,81 @@ func (a *termApprover) Capture(ctx context.Context, agentName string, u *url.URL
 		agent: agentName, release: release})
 	return map[string]any{"recording": true, "url": u.Redacted(), "browser": filepath.Base(exe),
 		"next": "Tell the person what to do in the window (ask_user). When they type /done or close the window, the HAR " +
-			"(redacted on their machine) arrives as their message, and a new build starts from it."}, nil
+			"(redacted on their machine) comes back: to the build that asked for it, else as their message."}, nil
+}
+
+// Tunnel serves tunnel.open: ascend-tunnel's agent, inside this chat, for a target the person confirmed.
+func (a *termApprover) Tunnel(_ context.Context, host string, port int) (string, error) {
+	if a.tun == nil {
+		return "", errors.New("this chat does not serve the host (ascend-agent run does): run ascend-tunnel instead")
+	}
+	key, err := a.tun.open(host, port)
+	if err == nil {
+		a.mu.Lock()
+		send := a.send
+		a.mu.Unlock()
+		if send != nil {
+			send(printMsg{styleDim.Render(fmt.Sprintf("⇄ tunnel open: Straiker reaches %s:%d through this machine until you exit or /tunnel close", host, port))})
+		}
+	}
+	return key, err
 }
 
 // PlatformGet serves the ascend pack: Straiker's API, read as the signed-in person.
 func (a *termApprover) PlatformGet(ctx context.Context, path string, query url.Values, out any) error {
 	return a.api.GetJSON(ctx, path, query, out)
+}
+
+// PlatformPost serves ascend.app_create: Straiker's API, written as the signed-in person.
+func (a *termApprover) PlatformPost(ctx context.Context, path string, body, out any) error {
+	return a.api.PostJSON(ctx, path, body, out)
+}
+
+// PlatformPatch serves ascend.app_adaptor: Straiker's API, written as the signed-in person.
+func (a *termApprover) PlatformPatch(ctx context.Context, path string, body, out any) error {
+	return a.api.PatchJSON(ctx, path, body, out)
+}
+
+// Confirm asks the person to approve one action an agent wants to take for them; the answer is never remembered.
+func (a *termApprover) Confirm(ctx context.Context, agentName, question string) bool {
+	reply := make(chan approval, 1)
+	if !a.ask(approvalMsg{kind: askConfirm, agent: agentName, text: question, reply: reply, ctx: ctx}) {
+		return false
+	}
+	select {
+	case ans := <-reply:
+		return ans == approveOnce
+	case <-ctx.Done():
+	case <-time.After(approveWait):
+	}
+	return false
+}
+
+// Secret asks the person to type a secret: never echoed, and returned to the tool only, never to an agent.
+func (a *termApprover) Secret(ctx context.Context, prompt string) (string, bool) {
+	reply := make(chan string, 1)
+	if !a.ask(approvalMsg{kind: askSecret, text: prompt, secret: reply, ctx: ctx}) {
+		return "", false
+	}
+	select {
+	case s := <-reply:
+		return s, s != ""
+	case <-ctx.Done():
+	case <-time.After(approveWait):
+	}
+	return "", false
+}
+
+// ask shows a prompt in the terminal, or reports that nobody is there to answer it.
+func (a *termApprover) ask(m approvalMsg) bool {
+	a.mu.Lock()
+	send := a.send
+	a.mu.Unlock()
+	if send == nil {
+		return false
+	}
+	send(m)
+	return true
 }
 
 func (a *termApprover) setSend(send func(tea.Msg)) {

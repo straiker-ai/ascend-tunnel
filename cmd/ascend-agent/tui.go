@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,17 +34,23 @@ var (
 )
 
 const (
-	placeholderIdle   = "ask anything, e.g. build the adaptor for app <id from the Ascend console>"
+	placeholderIdle   = "ask anything, e.g. connect https://chat.example.com/api/chat as support-bot"
 	placeholderAnswer = "answer the agent's question"
 )
 
-const chatHelp = `Talk to Ascend Agent in plain language. It can build an adaptor for one of your
+const chatHelp = `Talk to Ascend Agent in plain language. It can connect a new application ("connect <its
+chat URL> as <name>"; you confirm here before anything is created), build an adaptor for one of your
 applications (give it the app id from the Ascend console), and check what this machine can reach.
+  /apps                 your Ascend applications
   /status               session, app, host and spend
-  /source               print the latest proposed adaptor
+  The commands below act on the current application (the status bar shows it); to change it, tell the
+  agent ("work on support-bot").
+  /source               print the current app's proposed adaptor
   /save <file>          write it to a new file
-  /diff                 what the latest build changed
-  /har <file> [app-id]  attach a HAR of the chat; the next build uses it
+  /diff                 what the current app's latest build changed
+  /har <file>           attach a HAR of the current app's chat (its next build uses it); before there
+                        is an app, the agent finds the chat API in it
+  /tunnel               what this machine lets Straiker reach (/tunnel close [host] to stop)
   /sites                sites you always allow from this machine (/sites forget <host>)
   /usage                today's Ascend Agent budget for your organisation
   /done                 finish a browser capture (or close its window)
@@ -56,6 +63,7 @@ type chatConfig struct {
 	targets, allowHosts                                         []string
 	approvals                                                   bool // the person can approve sites here
 	budget                                                      agentclient.Budget
+	tun                                                         *tunnels // the chat's built-in tunnel; nil when ascend-agent run serves the host
 }
 
 type approval int
@@ -75,10 +83,20 @@ type captureMsg struct {
 
 type captureClosedMsg struct{}
 
-// approvalMsg is the host asking the person whether an agent may reach a site; reply takes the answer.
+// What a prompt asks of the person: a site to allow (y / a / n), one action to confirm (y / n), or a secret to type.
+const (
+	askSite = iota
+	askConfirm
+	askSecret
+)
+
+// approvalMsg is the host asking the person something; reply (or secret, for a secret) takes the answer.
 type approvalMsg struct {
+	kind                   int
 	agent, tool, url, host string
+	text                   string // the question, for a confirmation or a secret
 	reply                  chan approval
+	secret                 chan string
 	ctx                    context.Context // the host call waiting on it; once it ends, nobody is listening
 }
 
@@ -96,15 +114,16 @@ type chatModel struct {
 	status  string
 	cost    float64
 	ended   bool
-	busy    bool   // a request is in flight
-	doing   string // the running tool, for the spinner line
-	asked   bool   // the agent is waiting for an answer
-	armed   bool   // Ctrl-C pressed once
-	cand    *agentclient.Candidate
-	diff    string
+	busy    bool                              // a request is in flight
+	doing   string                            // the running tool, for the spinner line
+	asked   bool                              // the agent is waiting for an answer
+	armed   bool                              // Ctrl-C pressed once
+	cands   map[string]*agentclient.Candidate // each application's latest proposal, by app id
+	diffs   map[string]string                 // what each application's latest build changed
 	stop    context.CancelFunc
 	events  chan agentclient.Event
-	asks    []approvalMsg // site approvals waiting for the person, oldest first
+	asks    []approvalMsg // prompts waiting for the person, oldest first
+	typed   []rune        // a secret being typed: never shown, never sent to the agent
 	capture *captureMsg   // the capture browser, while it records
 }
 
@@ -205,6 +224,7 @@ func (m *chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sid, m.status = msg.s.SID, msg.s.Status
 		if msg.s.AppID != "" && m.cfg.appID == "" {
 			m.cfg.appID = msg.s.AppID
+			m.input.Prompt = promptFor(m.cfg.appID, m.appName)
 		}
 		note := "session " + m.sid
 		if len(msg.s.HostTools) > 0 {
@@ -219,7 +239,8 @@ func (m *chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Println(msg.line)
 	case errMsg:
 		m.busy = false
-		return m, m.print(styleBad.Render("✗ " + agentclient.Clean(msg.err.Error())))
+		// Wrapped to the terminal: an unwrapped long line is drawn over the input line.
+		return m, m.print(styleBad.Width(max(20, m.width-2)).Render("✗ " + agentclient.Clean(msg.err.Error())))
 	case doneMsg:
 		m.busy = false
 		return m, nil
@@ -233,7 +254,11 @@ func (m *chatModel) prune() tea.Cmd {
 	kept := m.asks[:0]
 	for _, a := range m.asks {
 		if a.expired() {
-			cmds = append(cmds, m.print(styleDim.Render("✗ no answer in time: "+agentclient.Clean(a.host)+" was not allowed")))
+			what := agentclient.Clean(a.host) + " was not allowed"
+			if a.kind != askSite {
+				what, m.typed = "nothing was done", nil
+			}
+			cmds = append(cmds, m.print(styleDim.Render("✗ no answer in time: "+what)))
 			continue
 		}
 		kept = append(kept, a)
@@ -246,6 +271,12 @@ func (m *chatModel) prune() tea.Cmd {
 // other key types as usual, so commands such as /stop still work while a prompt is showing.
 func (m *chatModel) answer(k tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	ask := m.asks[0]
+	switch ask.kind {
+	case askSecret:
+		return m.answerSecret(k)
+	case askConfirm:
+		return m.answerConfirm(k)
+	}
 	var ans approval
 	var line string
 	key := k.String()
@@ -266,6 +297,49 @@ func (m *chatModel) answer(k tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	ask.reply <- ans
 	m.asks = m.asks[1:]
 	return m, m.print(line), true
+}
+
+// answerConfirm takes y / n (Esc is no) for a confirmation, when the input line is empty.
+func (m *chatModel) answerConfirm(k tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	ask := m.asks[0]
+	var ans approval
+	var line string
+	switch key := k.String(); {
+	case k.Type == tea.KeyEsc || (m.input.Value() == "" && key == "n"):
+		ans, line = approveNo, styleDim.Render("✗ not confirmed: nothing was done")
+	case m.input.Value() == "" && key == "y":
+		ans, line = approveOnce, styleGood.Render("✔ confirmed")
+	default:
+		return m, nil, false
+	}
+	ask.reply <- ans
+	m.asks = m.asks[1:]
+	return m, m.print(line), true
+}
+
+// answerSecret takes every key while a secret is asked for: Enter gives it to the tool, Esc cancels. What is typed
+// is never shown and never reaches the input line.
+func (m *chatModel) answerSecret(k tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	ask := m.asks[0]
+	switch k.Type {
+	case tea.KeyEnter:
+		ask.secret <- string(m.typed)
+		m.typed, m.asks = nil, m.asks[1:]
+		return m, m.print(styleGood.Render("✔ entered (not shown)")), true
+	case tea.KeyEsc, tea.KeyCtrlC:
+		ask.secret <- ""
+		m.typed, m.asks = nil, m.asks[1:]
+		return m, m.print(styleDim.Render("✗ cancelled: nothing was done")), true
+	case tea.KeyBackspace:
+		if len(m.typed) > 0 {
+			m.typed = m.typed[:len(m.typed)-1]
+		}
+	case tea.KeyRunes, tea.KeySpace:
+		if len(m.typed) < 4096 {
+			m.typed = append(m.typed, k.Runes...)
+		}
+	}
+	return m, nil, true
 }
 
 func (m *chatModel) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -365,16 +439,12 @@ func (m *chatModel) say(text string) tea.Cmd {
 }
 
 func (m *chatModel) attachHAR(arg string) tea.Cmd {
-	path, app, _ := strings.Cut(strings.TrimSpace(arg), " ")
-	app = strings.TrimSpace(app)
+	path, app, label := strings.TrimSpace(arg), m.cfg.appID, m.appLabel()
 	if app == "" {
-		app = m.cfg.appID
+		label = "this session (no application yet: the agent finds the chat API in it)"
 	}
-	switch {
-	case path == "":
-		return m.print(styleDim.Render("usage: /har <file> [app-id]"))
-	case app != "" && !appIDRE.MatchString(app):
-		return m.print(styleBad.Render("✗ " + agentclient.Clean(app) + " is not an application id from the Ascend console"))
+	if path == "" {
+		return m.print(styleDim.Render("usage: /har <file> (for the current application, or before there is one)"))
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -392,14 +462,14 @@ func (m *chatModel) attachHAR(arg string) tea.Cmd {
 		if err != nil {
 			return err
 		}
-		_, err = m.api.UploadHAR(ctx, sid, app, "I attached a HAR of the chat ("+fileBase(path)+").", har)
+		_, err = m.api.UploadHAR(ctx, sid, app, "", "I attached a HAR of the chat ("+fileBase(path)+").", har)
 		if err != nil {
-			return fmt.Errorf("HAR upload: %w (with no application in focus: /har %s <app id>)", err, path)
+			return fmt.Errorf("HAR upload for %s: %w", label, err)
 		}
 		return nil
 	}
-	return tea.Batch(m.print(styleDim.Render(fmt.Sprintf("⏺ uploading %s (%d KB): Straiker keeps only a redacted trace",
-		fileBase(path), info.Size()>>10))), m.sessionWithin(uploadTime, "", upload))
+	return tea.Batch(m.print(styleDim.Render(fmt.Sprintf("⏺ uploading %s (%d KB) for %s: Straiker keeps only a redacted trace",
+		fileBase(path), info.Size()>>10, label))), m.sessionWithin(uploadTime, "", upload))
 }
 
 // finishCapture stops the capture browser, keeps a redacted copy, and sends the HAR to the session.
@@ -423,11 +493,15 @@ func (m *chatModel) finishCapture() tea.Cmd {
 	if app == "" {
 		app = m.cfg.appID
 	}
+	host := ""
+	if app == "" {
+		host = c.host // no application yet: the recorded page's host picks the requests that matter
+	}
 	note := fmt.Sprintf("⏺ captured %d requests (%d API calls), saved to %s", st.Requests, st.API, path)
 	text := fmt.Sprintf("I used the browser as asked and finished (%d requests, %d API calls captured).", st.Requests, st.API)
 	return tea.Batch(m.print(styleDim.Render(note)), m.sessionWithin(uploadTime, "", func(ctx context.Context, sid string) error {
-		if _, err := m.api.UploadHAR(ctx, sid, app, text, har); err != nil {
-			return fmt.Errorf("HAR upload: %w (it is saved at %s; /har %s <app id>)", err, path, path)
+		if _, err := m.api.UploadHAR(ctx, sid, app, host, text, har); err != nil {
+			return fmt.Errorf("HAR upload: %w (it is saved at %s: /har %s sends it again)", err, path, path)
 		}
 		return nil
 	}))
@@ -442,6 +516,46 @@ func agentName(id string) string {
 		return "the adaptor builder"
 	}
 	return orNone(agentclient.Clean(id))
+}
+
+// apps lists the person's Ascend applications straight from Straiker, with their own login: no agent, no model.
+func (m *chatModel) apps() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(m.ctx, 30*time.Second)
+		defer cancel()
+		var b strings.Builder
+		after, n := "", 0
+		for n < 300 {
+			q := url.Values{"limit": {"100"}}
+			if after != "" {
+				q.Set("starting_after", after)
+			}
+			var page struct {
+				Data []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+					URL  string `json:"url"`
+				} `json:"data"`
+				HasMore bool `json:"has_more"`
+			}
+			if err := m.api.GetJSON(ctx, "/api/v3/ascend/applications", q, &page); err != nil {
+				return errMsg{err}
+			}
+			for _, a := range page.Data {
+				fmt.Fprintf(&b, "  %s  %s  %s\n", agentclient.Clean(a.Name), styleDim.Render(agentclient.Clean(a.ID)),
+					styleDim.Render(agentclient.Clean(a.URL)))
+				n++
+			}
+			if !page.HasMore || len(page.Data) == 0 {
+				break
+			}
+			after = page.Data[len(page.Data)-1].ID
+		}
+		if n == 0 {
+			return printMsg{"no Ascend applications yet: ask the agent to connect one (\"connect <chat URL> as <name>\")"}
+		}
+		return printMsg{fmt.Sprintf("%d application(s):\n%s", n, strings.TrimRight(b.String(), "\n"))}
+	}
 }
 
 // keepCapture saves a capture (already redacted) under ~/.ascend-agent/captures, readable only by this user.
@@ -530,6 +644,7 @@ func (m *chatModel) event(e agentclient.Event) tea.Cmd {
 		}
 	case "session.app":
 		m.cfg.appID, m.appName = e.AppID, e.Name
+		m.input.Prompt = promptFor(e.AppID, e.Name)
 	case "usage":
 		m.cost = e.CostUSD
 		if e.DailyUSD > 0 {
@@ -546,10 +661,16 @@ func (m *chatModel) event(e agentclient.Event) tea.Cmd {
 		m.input.Placeholder = placeholderAnswer
 	case "build.result":
 		m.doing = ""
-		if e.Cand != nil && e.Cand.Source != "" {
-			m.cand = e.Cand
+		app := pick(e.AppID, m.cfg.appID)
+		if m.cands == nil {
+			m.cands, m.diffs = map[string]*agentclient.Candidate{}, map[string]string{}
 		}
-		m.diff = e.Diff
+		if e.Cand != nil && e.Cand.Source != "" {
+			m.cands[app] = e.Cand
+		} else {
+			delete(m.cands, app) // a build that proposed nothing leaves nothing to save for that app
+		}
+		m.diffs[app] = e.Diff
 	}
 	lines := renderEvent(e, m.width)
 	if len(lines) == 0 {
@@ -572,26 +693,34 @@ func (m *chatModel) command(line string) (tea.Model, tea.Cmd) {
 		return m, m.print(fmt.Sprintf("session %s · %s · $%.2f · app %s · host %s (%s)", orNone(m.sid), orNone(m.status),
 			m.cost, agentclient.Clean(app), m.cfg.hostID, m.cfg.hostMode))
 	case "/source":
-		if m.cand == nil {
-			return m, m.print(styleDim.Render("no proposal yet"))
+		cand, why := m.current()
+		if cand == nil {
+			return m, m.print(styleDim.Render(why))
 		}
-		return m, m.print(agentclient.Clean(m.cand.Source))
+		return m, m.print(styleDim.Render("adaptor for "+m.appLabel()+":") + "\n" + agentclient.Clean(cand.Source))
 	case "/diff":
-		if m.diff == "" {
-			return m, m.print(styleDim.Render("no diff: the latest build did not revise an earlier adaptor"))
+		if m.cfg.appID == "" {
+			return m, m.print(styleDim.Render(noCurrentApp))
 		}
-		return m, m.print(agentclient.Clean(m.diff))
+		if m.diffs[m.cfg.appID] == "" {
+			return m, m.print(styleDim.Render("no diff for " + m.appLabel() + ": its latest build did not revise an earlier adaptor"))
+		}
+		return m, m.print(styleDim.Render("changes for "+m.appLabel()+":") + "\n" + agentclient.Clean(m.diffs[m.cfg.appID]))
 	case "/save":
 		return m, m.save(arg)
 	case "/har":
 		return m, m.attachHAR(arg)
 	case "/sites":
 		return m, m.sites(arg)
+	case "/tunnel", "/tunnels":
+		return m, m.tunnel(arg)
 	case "/done":
 		if m.capture == nil {
 			return m, m.print(styleDim.Render("no browser capture is running"))
 		}
 		return m, m.finishCapture()
+	case "/apps":
+		return m, m.apps()
 	case "/usage":
 		return m, func() tea.Msg {
 			ctx, cancel := context.WithTimeout(m.ctx, 20*time.Second)
@@ -619,7 +748,7 @@ func (m *chatModel) command(line string) (tea.Model, tea.Cmd) {
 		if m.stop != nil {
 			m.stop()
 		}
-		m.sid, m.status, m.ended, m.cand, m.diff, m.cost, m.events, m.asked = "", "", false, nil, "", 0, nil, false
+		m.sid, m.status, m.ended, m.cands, m.diffs, m.cost, m.events, m.asked = "", "", false, nil, nil, 0, nil, false
 		m.input.Placeholder = placeholderIdle
 		return m, tea.Batch(cmd, m.print(styleDim.Render("Your next message starts a new session.")))
 	case "/exit", "/quit":
@@ -649,9 +778,75 @@ func (m *chatModel) sites(arg string) tea.Cmd {
 		styleDim.Render("\n/sites forget <host> to be asked again"))
 }
 
+// promptFor is the input line's prompt: the current application before it, as a shell shows the git branch.
+func promptFor(appID, name string) string {
+	switch {
+	case name != "":
+		return styleDim.Render("("+agentclient.Clean(name)+")") + " " + you + " "
+	case appID != "":
+		return styleDim.Render("("+appID[:min(8, len(appID))]+")") + " " + you + " "
+	}
+	return you + " "
+}
+
+// noCurrentApp is what a command that acts on the current application says when there is none.
+const noCurrentApp = "no current application: tell the agent which one to work on (e.g. \"work on support-bot\")"
+
+// current is the current application's latest proposal, or why there is none.
+func (m *chatModel) current() (*agentclient.Candidate, string) {
+	if m.cfg.appID == "" {
+		return nil, noCurrentApp
+	}
+	if c := m.cands[m.cfg.appID]; c != nil {
+		return c, ""
+	}
+	return nil, "no proposed adaptor for " + m.appLabel() + " yet"
+}
+
+// appLabel names the current application: its name and id, or its id.
+func (m *chatModel) appLabel() string {
+	if m.appName != "" {
+		return agentclient.Clean(m.appName) + " (" + m.cfg.appID + ")"
+	}
+	return m.cfg.appID
+}
+
+// tunnel lists what the chat's built-in tunnel lets Straiker reach, or closes it ("close", or "close <host>").
+func (m *chatModel) tunnel(arg string) tea.Cmd {
+	if m.cfg.tun == nil {
+		return m.print(styleDim.Render("no tunnel in this chat: ascend-agent run serves this machine"))
+	}
+	if what, ok := strings.CutPrefix(arg+" ", "close "); ok {
+		gone, err := m.cfg.tun.shut(strings.TrimSpace(what))
+		if err != nil {
+			return m.print(styleDim.Render(err.Error()))
+		}
+		return m.print(styleGood.Render("✔ closed "+strings.Join(gone, ", ")+": Straiker no longer reaches it through this machine") +
+			styleDim.Render("\n  applications on its tunnel address fail until a tunnel runs again; to keep one running:\n  "+
+				m.cfg.tun.keepCommand(gone)))
+	}
+	if arg != "" {
+		return m.print(styleDim.Render("usage: /tunnel, or /tunnel close [host]"))
+	}
+	open := m.cfg.tun.list()
+	if len(open) == 0 {
+		return m.print(styleDim.Render("no tunnel open: Straiker reaches nothing through this machine"))
+	}
+	lines := []string{"Straiker reaches through this machine, until you exit or /tunnel close:"}
+	for _, o := range open {
+		use := fmt.Sprintf("%d connection(s)", o.conns)
+		if o.failed > 0 {
+			use += fmt.Sprintf(", %d failed", o.failed)
+		}
+		lines = append(lines, fmt.Sprintf("  ⇄ %s  open %s · %s", o.addr, time.Since(o.since).Round(time.Second), use))
+	}
+	return m.print(strings.Join(lines, "\n"))
+}
+
 func (m *chatModel) save(path string) tea.Cmd {
-	if m.cand == nil {
-		return m.print(styleDim.Render("no proposal yet"))
+	cand, why := m.current()
+	if cand == nil {
+		return m.print(styleDim.Render(why))
 	}
 	if path == "" {
 		return m.print(styleDim.Render("usage: /save <file>"))
@@ -660,14 +855,14 @@ func (m *chatModel) save(path string) tea.Cmd {
 	if err != nil {
 		return m.print(styleBad.Render("✗ " + err.Error()))
 	}
-	_, err = f.WriteString(m.cand.Source)
+	_, err = f.WriteString(cand.Source)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return m.print(styleBad.Render("✗ " + err.Error()))
 	}
-	return m.print(styleGood.Render(fmt.Sprintf("✔ wrote %s (%d bytes)", path, len(m.cand.Source))))
+	return m.print(styleGood.Render(fmt.Sprintf("✔ wrote %s: the adaptor for %s (%d bytes)", path, m.appLabel(), len(cand.Source))))
 }
 
 func (m *chatModel) quit() tea.Cmd {
@@ -686,7 +881,14 @@ func (m *chatModel) print(s string) tea.Cmd { return tea.Println(s) }
 
 func (m *chatModel) View() string {
 	var b strings.Builder
-	if len(m.asks) > 0 {
+	if len(m.asks) > 0 && m.asks[0].kind == askConfirm {
+		a := m.asks[0]
+		b.WriteString(styleQuestion.Render(fmt.Sprintf("? Allow %s to %s?", agentName(a.agent), agentclient.Clean(a.text))) + "\n")
+		b.WriteString("  [y] yes   [n] no\n")
+	} else if len(m.asks) > 0 && m.asks[0].kind == askSecret {
+		b.WriteString(styleQuestion.Render("? "+agentclient.Clean(m.asks[0].text)) + "\n")
+		b.WriteString(fmt.Sprintf("  type it and press Enter (%d characters, not shown); Esc cancels\n", len(m.typed)))
+	} else if len(m.asks) > 0 {
 		a := m.asks[0]
 		verb := map[string]string{"http.probe": "read", "net.check": "check that it can reach",
 			"browser.capture": "open a browser and record you using"}[a.tool]
@@ -720,6 +922,15 @@ func (m *chatModel) View() string {
 			app = agentclient.Clean(m.appName)
 		}
 		bar += "· app " + app + " "
+	}
+	if m.cfg.tun != nil {
+		if open := m.cfg.tun.list(); len(open) > 0 {
+			addrs := make([]string, len(open))
+			for i, o := range open {
+				addrs[i] = o.addr
+			}
+			bar += "· ⇄ " + strings.Join(addrs, ", ") + " "
+		}
 	}
 	b.WriteString(styleBar.Render(bar))
 	return b.String()
@@ -812,7 +1023,7 @@ func renderResult(e agentclient.Event, wrap lipgloss.Style) []string {
 		if e.Checks != nil && len(e.Checks.Warnings) > 0 {
 			lines = append(lines, styleQuestion.Render(wrap.Render("    warnings: "+c(joinRaw(e.Checks.Warnings)))))
 		}
-		return append(lines, styleDim.Render("    /source to read it · /save <file> to keep it"))
+		return append(lines, styleDim.Render("    /source to read it · /save <file> to keep it (while this application is current)"))
 	case "needs_human":
 		return []string{styleQuestion.Render(wrap.Render("  ⚠ the builder stopped: " + c(e.Reason)))}
 	case "cancelled":

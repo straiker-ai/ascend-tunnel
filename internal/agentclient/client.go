@@ -213,6 +213,36 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	return json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(out)
 }
 
+// PostJSON sends body to Straiker's API as the signed-in person and decodes the answer into out.
+func (c *Client) PostJSON(ctx context.Context, path string, body, out any) error {
+	return c.sendJSON(ctx, http.MethodPost, path, body, out)
+}
+
+// PatchJSON is PostJSON with PATCH: a partial update, as the signed-in person.
+func (c *Client) PatchJSON(ctx context.Context, path string, body, out any) error {
+	return c.sendJSON(ctx, http.MethodPatch, path, body, out)
+}
+
+func (c *Client) sendJSON(ctx context.Context, method, path string, body, out any) error {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	resp, err := c.send(ctx, method, path, raw, http.Header{"Content-Type": {"application/json"}})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return apiError(resp)
+	}
+	// An update may answer 204 or an empty 200.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(out); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
 // Host is an enrolled machine as the cloud sees it.
 type Host struct {
 	Tenant      string `json:"tenant"`
@@ -312,7 +342,9 @@ type Trace struct {
 
 // UploadHAR sends the session a HAR, gzipped, with the person's note; the agent gets it as a message. appID may be
 // empty for the session's application. Only the redacted trace is stored.
-func (c *Client) UploadHAR(ctx context.Context, sid, appID, note string, har []byte) (*Trace, error) {
+// UploadHAR sends a HAR to the session: for appID, or with none (before the application exists) for the session,
+// whose requests on host matter most.
+func (c *Client) UploadHAR(ctx context.Context, sid, appID, host, note string, har []byte) (*Trace, error) {
 	var gz bytes.Buffer
 	zw := gzip.NewWriter(&gz)
 	if _, err := zw.Write(har); err != nil {
@@ -324,6 +356,8 @@ func (c *Client) UploadHAR(ctx context.Context, sid, appID, note string, har []b
 	q := url.Values{}
 	if appID != "" {
 		q.Set("appId", appID)
+	} else if host != "" {
+		q.Set("host", host)
 	}
 	if note != "" {
 		q.Set("note", note)

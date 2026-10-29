@@ -14,6 +14,7 @@ import (
 // agent reads only what that person's own login can, and no token leaves this machine.
 type Platform interface {
 	PlatformGet(ctx context.Context, path string, query url.Values, out any) error
+	PlatformPost(ctx context.Context, path string, body, out any) error
 }
 
 var (
@@ -27,12 +28,13 @@ const (
 	summaryChars   = 1500
 )
 
-// ascendTools are fixed, read-only calls on the person's Ascend data: the cloud sends ids, never a path.
+// ascendTools are fixed, read-only calls on the person's Ascend data: the cloud sends ids, never a path. The one
+// write, ascend.app_create (appcreate.go), is added only where a person can confirm it.
 func ascendTools(pl Platform) []tool {
 	return []tool{
 		{
 			def: mcp.Tool{Name: "ascend.apps", Title: "The person's Ascend applications",
-				Description: "List the Ascend applications the signed-in person can see: id, name and the host each one talks to.",
+				Description: "List the Ascend applications the signed-in person can see: id, name, and the endpoint (and its host) each one talks to.",
 				InputSchema: schema(`{"type":"object","properties":{},"additionalProperties":false}`),
 				Annotations: &mcp.Annotations{ReadOnlyHint: true}},
 			run: func(ctx context.Context, args json.RawMessage) mcp.Result {
@@ -55,7 +57,7 @@ func ascendTools(pl Platform) []tool {
 						return failure("applications", err)
 					}
 					for _, a := range page.Data {
-						apps = append(apps, map[string]any{"id": a["id"], "name": a["name"], "host": hostOf(a["url"])})
+						apps = append(apps, map[string]any{"id": a["id"], "name": a["name"], "url": a["url"], "host": hostOf(a["url"])})
 					}
 					if !page.HasMore || len(page.Data) == 0 {
 						break

@@ -31,6 +31,35 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then go test ./...; else go test -race ./...; fi
 
+  # `service install` on a real Windows machine: the AscendTunnel service starts as its virtual account, writes its
+  # log in the key's directory (the ACL grant works), and goes away on uninstall. It dials only dev's relay.
+  windows-service:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: install, run, uninstall
+        shell: pwsh
+        run: |
+          go build -o ascend-tunnel.exe ./cmd/ascend-tunnel
+          $dir = Join-Path $env:RUNNER_TEMP "tunnel-state"
+          ./ascend-tunnel.exe service install --org 1 --env dev --allow example.com --state-dir $dir
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Start-Sleep -Seconds 5
+          $st = ./ascend-tunnel.exe service status
+          $st
+          $log = Join-Path $dir "connections.jsonl"
+          if ("$st" -notmatch "running" -or -not (Select-String -Path $log -Pattern '"event":"identity"' -Quiet)) {
+            Get-Content $log -ErrorAction SilentlyContinue; exit 1
+          }
+          Get-Content $log
+          ./ascend-tunnel.exe service uninstall
+          if ($LASTEXITCODE -ne 0 -or "$(./ascend-tunnel.exe service status)" -notmatch "not installed") { exit 1 }
+
   lint:
     runs-on: ubuntu-latest
     steps:
