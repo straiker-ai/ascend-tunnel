@@ -80,3 +80,51 @@ fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},bod
 		t.Errorf("stats: %+v", st)
 	}
 }
+
+// A page reading a stream that never ends with fetch(), as Salesforce Messaging does: the reply is in the HAR.
+func TestARealBrowsersStreamedFetchIsRecorded(t *testing.T) {
+	exe, err := Find()
+	if err != nil {
+		t.Skip("no browser installed:", err)
+	}
+	extraArgs = []string{"--headless=new"}
+	defer func() { extraArgs = nil }()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<title>Chat</title><script>
+fetch("/sse").then(async r=>{const rd=r.body.getReader();for(;;){const {done}=await rd.read();if(done)break}});
+</script>`)
+	})
+	mux.HandleFunc("/sse", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl := w.(http.Flusher)
+		fmt.Fprint(w, "event: ping\ndata: {}\n\n")
+		fl.Flush()
+		time.Sleep(500 * time.Millisecond)
+		fmt.Fprint(w, `data: {"text":"Hi! Welcome to Acme"}`+"\n\n")
+		fl.Flush()
+		<-r.Context().Done() // never ends on its own
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cp, err := Start(ctx, exe, t.TempDir(), srv.URL+"/", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		raw, _ := cp.rec.har("test")
+		if strings.Contains(string(raw), `Welcome to Acme`) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	raw, _ := cp.Stop()
+	if !strings.Contains(string(raw), `Welcome to Acme`) {
+		t.Fatalf("the streamed reply is missing from the HAR")
+	}
+}

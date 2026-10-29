@@ -20,7 +20,7 @@ import (
 )
 
 // Packs are the built-in tool packs, by name. A pack's tools are named "<pack>.<tool>".
-var Packs = []string{"env", "net", "http", "browser", "ascend"}
+var Packs = []string{"env", "net", "http", "browser", "ascend", "tunnel"}
 
 const (
 	defaultConcurrentCalls = 4
@@ -110,8 +110,10 @@ func Parse(data []byte) (*Policy, error) {
 // DefaultAgents are what Straiker's agents may call under the built-in default: Ascend Agent itself ("ascend")
 // and the adaptor builder it hands builds to, each signing its own calls.
 var DefaultAgents = map[string][]string{
-	"ascend":          {"env.*", "net.*", "http.*", "browser.*", "ascend.*"},
-	"adaptor-builder": {"env.*", "net.*", "http.*", "browser.*", "ascend.*"},
+	"ascend": {"env.*", "net.*", "http.*", "browser.*", "ascend.*", "tunnel.*"},
+	// The builder reads the person's Ascend data but never writes it (ascend.app_create is Ascend Agent's), nor
+	// opens a tunnel.
+	"adaptor-builder": {"env.*", "net.*", "http.*", "browser.*", "ascend.apps", "ascend.runs", "ascend.run"},
 }
 
 // Default is the policy when there is no file: every pack, no targets, and a person at the terminal approves

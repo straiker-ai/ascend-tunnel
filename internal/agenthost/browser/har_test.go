@@ -39,7 +39,7 @@ func TestAChatCallIsRecordedAndItsSecretsStayHere(t *testing.T) {
 	r.handle(ev("s1", "Network.responseReceived", `{"requestId":"1","type":"Fetch","response":{"status":200,"statusText":"OK",
 		"headers":{"Content-Type":"application/json"},"mimeType":"application/json"}}`))
 	r.handle(ev("s1", "Network.responseReceivedExtraInfo", `{"requestId":"1","headers":{"Set-Cookie":"sid=new-s3cr3t; Path=/"}}`))
-	if id := r.handle(ev("s1", "Network.loadingFinished", `{"requestId":"1"}`)); id != "1" {
+	if id, _ := r.handle(ev("s1", "Network.loadingFinished", `{"requestId":"1"}`)); id != "1" {
 		t.Fatal("an API response's body is fetched")
 	}
 	body := base64.StdEncoding.EncodeToString([]byte(`{"reply":"Hi! How can I help?","access_token":"tok-9"}`))
@@ -103,6 +103,29 @@ func TestStreamsAreRecorded(t *testing.T) {
 	content := es[1]["response"].(map[string]any)["content"].(map[string]any)
 	if content["mimeType"] != "text/event-stream" || content["text"] != "event: delta\ndata: {\"t\":\"Hel\"}\n\ndata: done\n\n" {
 		t.Fatalf("sse: %v", content)
+	}
+}
+
+func TestAFetchThatReadsAStreamIsFollowedChunkByChunk(t *testing.T) {
+	r := newRecorder()
+	r.handle(ev("s", "Network.requestWillBeSent", `{"requestId":"f","type":"Fetch","request":{"url":"https://acme.my.salesforce-scrt.com/eventrouter/v1/sse","method":"GET","headers":{}}}`))
+	_, follow := r.handle(ev("s", "Network.responseReceived", `{"requestId":"f","type":"Fetch","response":{"status":200,"headers":{},"mimeType":"text/event-stream"}}`))
+	if follow != "f" {
+		t.Fatalf("a streamed fetch is followed: %q", follow)
+	}
+	b64 := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	r.streamStarted("s", "f", b64("event: ping\ndata: {}\n\n"))
+	r.handle(ev("s", "Network.dataReceived", `{"requestId":"f","dataLength":40,"data":"`+b64(`data: {"text":"Hi! Welcome to Acme"}`+"\n\n")+`"}`))
+	r.handle(ev("s", "Network.dataReceived", `{"requestId":"f","dataLength":10}`)) // no data: not followed then
+	content := entries(harOf(t, r))[0]["response"].(map[string]any)["content"].(map[string]any)
+	if content["mimeType"] != "text/event-stream" || !strings.Contains(content["text"].(string), "Welcome to Acme") ||
+		!strings.HasPrefix(content["text"].(string), "event: ping") {
+		t.Fatalf("stream: %v", content)
+	}
+	r2 := newRecorder()
+	r2.handle(ev("s", "Network.requestWillBeSent", `{"requestId":"e","type":"EventSource","request":{"url":"https://chat.example.com/sse","method":"GET","headers":{}}}`))
+	if _, follow := r2.handle(ev("s", "Network.responseReceived", `{"requestId":"e","type":"EventSource","response":{"status":200,"headers":{},"mimeType":"text/event-stream"}}`)); follow != "" {
+		t.Fatal("an EventSource has its own messages; it is not followed twice")
 	}
 }
 
