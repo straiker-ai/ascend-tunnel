@@ -57,7 +57,7 @@ Straiker cloud agent ──► Straiker agent API ◄──── outbound HTTPS
 | `ascend.apps`, `ascend.runs`, `ascend.run` | your Ascend applications and assessment runs, read with your own login |
 | `ascend.app_create` | creates an Ascend application with your own login, only after you confirm in the terminal; returns the applications already on that endpoint or name instead of a duplicate. Offered only in `ascend-agent` chat, and only to Ascend Agent (not the builder) |
 | `ascend.app_adaptor` | stores an adaptor on one of your applications with your own login (in its request template, under `_adaptor_src`), only after you confirm in the terminal; refuses if the application's name doesn't match, and checks that Straiker kept it. Ascend Agent sends only what the adaptor builder proposed and tested. Offered only in `ascend-agent` chat, and only to Ascend Agent |
-| `tunnel.open` | lets Straiker reach an app only your network reaches, through this machine, while `ascend-agent` runs (ascend-tunnel built in, with this machine's key), only after you confirm in the terminal; returns the tunnel endpoint and agent key for the application. Offered only in `ascend-agent` chat, only to Ascend Agent, and only within the policy's `interactive.allow_hosts` |
+| `tunnel.open` | lets Straiker reach an app only your network reaches, through this machine, while `ascend-agent` runs (Straiker Broker built in, with its own key, registered with your login), only after you confirm in the terminal; returns the `.brk.straiker.ai` endpoint and Straiker Broker target for the application. Offered only in `ascend-agent` chat, only to Ascend Agent, and only within the policy's `interactive.allow_hosts` |
 
 ## Policy
 
@@ -99,7 +99,7 @@ and `brew install straiker-ai/tap/ascend-agent` brings `ascend-tunnel` with it).
 Then:
 
 ```bash
-ascend-agent key                          # this machine's key (the tunnel's), to enrol the host
+ascend-agent key                          # this machine's key (ascend-tunnel's too), to enrol the host
 ascend-agent run -policy ascend-agent.yaml        # serve Straiker's cloud agents
 ascend-agent serve -stdio -policy ascend-agent.yaml   # the same tools over stdio, for an MCP inspector
 ```
@@ -165,18 +165,23 @@ and Ascend Agent never sees it. `/apps` lists your applications without asking t
 Ascend Agent checks the endpoint first. A known agent platform (Salesforce Agentforce, Amazon Bedrock, Azure AI
 Foundry, Google Cloud, Copilot Studio, ChatGPT) goes to its Straiker Defend onboarding page instead. An endpoint
 Straiker's cloud cannot reach (an internal name, or private addresses only) needs a tunnel, and Ascend Agent offers
-one through this machine, with nothing else to install:
+one through this machine with Straiker Broker, built in, with nothing else to install:
 
 ```text
-? Allow Ascend Agent to let Straiker's cloud reach chat.corp.internal:443 through this machine while ascend-agent runs (org 1)?
+? Allow Ascend Agent to let Straiker's cloud reach chat.corp.internal:443 through this machine while ascend-agent runs (Straiker Broker, org 1)?
   [y] yes   [n] no
 ```
 
-The application is then created on the tunnel's address with this machine's key. While a tunnel is open, the status
-bar shows it (`⇄ chat.corp.internal:443`); `/tunnel` lists what Straiker reaches through this machine and how many
-connections it made, and `/tunnel close` (or `/tunnel close <host>`) stops it at once. The tunnel runs only while
-`ascend-agent` does; when you leave, it prints the command that keeps it running as a service, with the same key
-(so the application keeps working): `ascend-tunnel service install --org 1 --allow chat.corp.internal:443`.
+With your login, `ascend-agent` then registers its broker key (kept in `<state-dir>/broker`, apart from this
+machine's key), declares `chat.corp.internal` as a target of that broker, and grants it to Ascend, reusing whatever
+is already there; this needs a personal access token with the `integration:write` scope. The application is created
+on `https://chat.corp.internal.brk.straiker.ai/...` for that target. The broker dials out to
+`broker.<env>.straiker.ai` on 443. While a tunnel is open, the status bar shows it (`⇄ chat.corp.internal:443`);
+`/tunnel` lists what Straiker reaches through this machine and how many connections it made, and `/tunnel close`
+(or `/tunnel close <host>`) stops it at once. The tunnel runs only while `ascend-agent` does; when you leave, it
+prints the [straiker-broker](https://github.com/straiker-ai/straiker-broker) command that keeps it running as a
+service, with the same key (so the application keeps working): `straiker-broker service install --org 1 --allow
+chat.corp.internal:443 --state-dir <state-dir>/broker`.
 
 If the API needs more than one plain request per message (a login step, a session id carried between turns, a
 streamed reply), the adaptor builder writes an adaptor for it, and Ascend Agent offers to store it on the application;

@@ -26,9 +26,10 @@ func (f *fakeTunnel) Confirm(ctx context.Context, agent, question string) bool {
 
 func (f *fakeTunnel) Secret(ctx context.Context, prompt string) (string, bool) { return "", false }
 
-func (f *fakeTunnel) Tunnel(ctx context.Context, host string, port int) (string, error) {
-	f.opened = append(f.opened, fmt.Sprintf("%s:%d", host, port))
-	return "AAAAC3NzaC1lZDI1NTE5AAAAIOo1Og0g1ySNPvGcpekTrxnLXVc2+2QJ5n3aisivR4X2", nil
+func (f *fakeTunnel) Tunnel(ctx context.Context, host string, port int) (string, string, error) {
+	addr := fmt.Sprintf("%s:%d", host, port)
+	f.opened = append(f.opened, addr)
+	return "tgt_01", "straiker-broker service install --org 1 --allow " + addr + " --env dev --state-dir /s/broker", nil
 }
 
 func listening(t *testing.T) string {
@@ -51,19 +52,22 @@ func TestATunnelOpensOnlyAfterThePersonConfirms(t *testing.T) {
 	out, isErr := callAs(t, tunnelRegistry(policy.Default(), f), "ascend", "tunnel.open",
 		`{"endpoint":"http://`+addr+`/v1/chat?x=1"}`)
 	_, port, _ := net.SplitHostPort(addr)
-	if isErr || out["endpoint"] != "http://127.0.0.1.tun.straiker.ai/v1/chat?x=1" || out["target"] != addr ||
-		!strings.HasPrefix(out["agentKey"].(string), "AAAAC3NzaC1lZDI1NTE5") {
+	if isErr || out["endpoint"] != "http://127.0.0.1.brk.straiker.ai/v1/chat?x=1" || out["brokerTarget"] != "tgt_01" ||
+		out["target"] != addr || out["agentKey"] != nil {
 		t.Fatalf("open: %v", out)
 	}
+	if next := out["next"].(string); !strings.Contains(next, `"_broker_targets": {"127.0.0.1.brk.straiker.ai": "tgt_01"}`) {
+		t.Fatalf("next names the application's broker target: %q", next)
+	}
 	if len(f.asked) != 1 || !strings.HasPrefix(f.asked[0], "ascend: ") || !strings.Contains(f.asked[0], addr) ||
-		!strings.Contains(f.asked[0], "org 1") {
+		!strings.Contains(f.asked[0], "Straiker Broker, org 1") {
 		t.Fatalf("the person is asked, naming the target and org: %q", f.asked)
 	}
 	if len(f.opened) != 1 || f.opened[0] != "127.0.0.1:"+port {
 		t.Fatalf("opened: %v", f.opened)
 	}
-	if keep := out["keepRunning"].(string); !strings.HasPrefix(keep, "ascend-tunnel service install --org 1 --allow "+addr+" --env dev") {
-		t.Fatalf("the service command keeps the same target and environment: %q", keep)
+	if keep := out["keepRunning"]; keep != "straiker-broker service install --org 1 --allow "+addr+" --env dev --state-dir /s/broker" {
+		t.Fatalf("the service command is the tunnel's own: %q", keep)
 	}
 }
 
@@ -87,7 +91,8 @@ func TestATunnelIsNotOfferedForWhatThisMachineCannotReach(t *testing.T) {
 		{"http://169.254.169.254/latest", "never reachable"},
 		{"ftp://" + addr, "http or https"},
 		{"https://user:pw@" + addr, "no credentials"},
-		{"https://chat.corp.internal.tun.straiker.ai/v1", "already a tunnel address"},
+		{"https://chat.corp.internal.brk.straiker.ai/v1", "already a Straiker Broker address"},
+		{"https://CHAT.corp.internal.BRK.straiker.ai/v1", "already a Straiker Broker address"},
 	} {
 		out, isErr := callAs(t, r, "ascend", "tunnel.open", `{"endpoint":"`+c.endpoint+`"}`)
 		if !isErr || !strings.Contains(out["error"].(string), c.want) {

@@ -822,7 +822,7 @@ func (m *chatModel) tunnel(arg string) tea.Cmd {
 			return m.print(styleDim.Render(err.Error()))
 		}
 		return m.print(styleGood.Render("✔ closed "+strings.Join(gone, ", ")+": Straiker no longer reaches it through this machine") +
-			styleDim.Render("\n  applications on its tunnel address fail until a tunnel runs again; to keep one running:\n  "+
+			styleDim.Render("\n  applications on its Straiker Broker address fail until straiker-broker reaches it again; to keep it running:\n  "+
 				m.cfg.tun.keepCommand(gone)))
 	}
 	if arg != "" {

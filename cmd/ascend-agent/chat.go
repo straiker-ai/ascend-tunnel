@@ -101,7 +101,10 @@ func chat(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	ap := &termApprover{org: s.org, api: api}
 	mode := "served by ascend-agent run: approvals off"
 	if !online {
-		ap.tun = newTunnels(hctx, s, id)
+		if ap.tun, err = newTunnels(hctx, s, api); err != nil {
+			fmt.Fprintln(stderr, "ascend-agent:", err)
+			return 1
+		}
 		h, err := newHost(s, id, agent.NewAudit(s.auditLog, io.Discard), ap)
 		if err != nil {
 			fmt.Fprintln(stderr, "ascend-agent:", err)
@@ -134,7 +137,7 @@ func chat(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	}
 	if ap.tun != nil {
 		if allow := ap.tun.close(); len(allow) > 0 {
-			fmt.Fprintf(stdout, "The tunnel to %s stopped with ascend-agent. To keep it running for assessments:\n  %s\n",
+			fmt.Fprintf(stdout, "The tunnel to %s stopped with ascend-agent. To keep it running for assessments, with straiker-broker:\n  %s\n",
 				strings.Join(allow, ", "), ap.tun.keepCommand(allow))
 		}
 	}
@@ -406,21 +409,22 @@ func (a *termApprover) Capture(ctx context.Context, agentName string, u *url.URL
 			"(redacted on their machine) comes back: to the build that asked for it, else as their message."}, nil
 }
 
-// Tunnel serves tunnel.open: ascend-tunnel's agent, inside this chat, for a target the person confirmed.
-func (a *termApprover) Tunnel(_ context.Context, host string, port int) (string, error) {
+// Tunnel serves tunnel.open: Straiker Broker's agent, inside this chat, for a target the person confirmed.
+func (a *termApprover) Tunnel(ctx context.Context, host string, port int) (string, string, error) {
 	if a.tun == nil {
-		return "", errors.New("this chat does not serve the host (ascend-agent run does): run ascend-tunnel instead")
+		return "", "", errors.New("this chat does not serve the host (ascend-agent run does): run straiker-broker instead")
 	}
-	key, err := a.tun.open(host, port)
-	if err == nil {
-		a.mu.Lock()
-		send := a.send
-		a.mu.Unlock()
-		if send != nil {
-			send(printMsg{styleDim.Render(fmt.Sprintf("⇄ tunnel open: Straiker reaches %s:%d through this machine until you exit or /tunnel close", host, port))})
-		}
+	target, allow, err := a.tun.open(ctx, host, port)
+	if err != nil {
+		return "", "", err
 	}
-	return key, err
+	a.mu.Lock()
+	send := a.send
+	a.mu.Unlock()
+	if send != nil {
+		send(printMsg{styleDim.Render(fmt.Sprintf("⇄ tunnel open: Straiker reaches %s:%d through this machine until you exit or /tunnel close", host, port))})
+	}
+	return target, a.tun.keepCommand(allow), nil
 }
 
 // PlatformGet serves the ascend pack: Straiker's API, read as the signed-in person.

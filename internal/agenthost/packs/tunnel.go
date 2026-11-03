@@ -11,13 +11,16 @@ import (
 
 	"github.com/straiker-ai/ascend-tunnel/internal/agenthost/mcp"
 	"github.com/straiker-ai/ascend-tunnel/internal/agenthost/policy"
-	"github.com/straiker-ai/ascend-tunnel/internal/config"
 )
 
-// Tunneler runs ascend-tunnel's agent inside this process, for the targets the person approves, until the chat
-// ends. It returns the agent key an Ascend application lists in _tunnel_agent_keys.
+// BrokerSuffix is the domain Straiker reaches a Straiker Broker target under: <host>.<suffix>.
+const BrokerSuffix = "brk.straiker.ai"
+
+// Tunneler runs Straiker Broker's agent inside this process, for the targets the person approves, until the chat
+// ends. It registers each target with Straiker as the signed-in person and returns the target's id, with the command
+// that keeps the open targets reachable as a service.
 type Tunneler interface {
-	Tunnel(ctx context.Context, host string, port int) (agentKey string, err error)
+	Tunnel(ctx context.Context, host string, port int) (brokerTarget, keepRunning string, err error)
 }
 
 // tunnelOpen lets Straiker's cloud reach an app only this network reaches, through this machine, for as long as the
@@ -26,8 +29,8 @@ func tunnelOpen(p *policy.Policy, cf Confirmer, tn Tunneler, info Info) tool {
 	return tool{
 		def: mcp.Tool{Name: "tunnel.open", Title: "Reach a private app through this machine",
 			Description: "Let Straiker's cloud reach an app that only this network reaches, through this machine, for as " +
-				"long as ascend-agent runs (ascend-tunnel, built in). The person confirms. Returns the endpoint to create " +
-				"the Ascend application on and the agent key for its _tunnel_agent_keys.",
+				"long as ascend-agent runs (Straiker Broker, built in). The person confirms. Returns the endpoint to create " +
+				"the Ascend application on and the Straiker Broker target for its _broker_targets.",
 			InputSchema: schema(`{"type":"object","properties":{"endpoint":{"type":"string",` +
 				`"description":"the app's own http(s) URL, as this machine reaches it"}},` +
 				`"required":["endpoint"],"additionalProperties":false}`),
@@ -48,8 +51,8 @@ func tunnelOpen(p *policy.Policy, cf Confirmer, tn Tunneler, info Info) tool {
 				return refuse("endpoint must be http or https")
 			case u.Hostname() == "" || u.User != nil:
 				return refuse("endpoint must name a host and carry no credentials")
-			case strings.HasSuffix(strings.ToLower(u.Hostname()), "."+config.TunnelSuffix):
-				return refuse("that is already a tunnel address: give the app's own URL")
+			case strings.HasSuffix(strings.ToLower(u.Hostname()), "."+BrokerSuffix):
+				return refuse("that is already a Straiker Broker address: give the app's own URL")
 			case blockedHost(u.Hostname()):
 				return refuse("that address is never reachable from this host (link-local or cloud metadata)")
 			case !p.MayApprove(u.Hostname()):
@@ -69,29 +72,25 @@ func tunnelOpen(p *policy.Policy, cf Confirmer, tn Tunneler, info Info) tool {
 			cancel()
 			if err != nil {
 				return mcp.JSONResult(map[string]any{"error": "this machine cannot reach " + addr + ": " + err.Error(),
-					"next": "run ascend-tunnel on a machine that reaches it"}, true)
+					"next": "run straiker-broker on a machine that reaches it"}, true)
 			}
 			conn.Close()
-			q := fmt.Sprintf("let Straiker's cloud reach %s through this machine while ascend-agent runs (org %s)", addr, info.Org)
+			q := fmt.Sprintf("let Straiker's cloud reach %s through this machine while ascend-agent runs (Straiker Broker, org %s)", addr, info.Org)
 			if !cf.Confirm(ctx, agentFrom(ctx), q) {
 				return refuse("the person at this machine did not open the tunnel")
 			}
-			key, err := tn.Tunnel(ctx, host, port)
+			target, keep, err := tn.Tunnel(ctx, host, port)
 			if err != nil {
 				return failure("tunnel", err)
 			}
-			tu := url.URL{Scheme: u.Scheme, Host: host + "." + config.TunnelSuffix, Path: u.Path, RawPath: u.RawPath,
+			tu := url.URL{Scheme: u.Scheme, Host: host + "." + BrokerSuffix, Path: u.Path, RawPath: u.RawPath,
 				RawQuery: u.RawQuery}
-			keep := fmt.Sprintf("ascend-tunnel service install --org %s --allow %s", info.Org, addr)
-			if info.Env != "" && info.Env != config.DefaultEnv {
-				keep += " --env " + info.Env
-			}
 			return mcp.JSONResult(map[string]any{
-				"endpoint": tu.String(), "agentKey": key, "target": addr,
-				"lifetime":    "until the person exits ascend-agent or closes it with /tunnel close; Straiker reaches the app only while it is open",
-				"keepRunning": keep + "  (on this machine, so assessments run without the terminal; same agent key)",
-				"next": "create the application on endpoint with tunnel_agent_keys [agentKey]; the tunnel connects " +
-					"within seconds of the application listing the key",
+				"endpoint": tu.String(), "brokerTarget": target, "target": addr, "keepRunning": keep,
+				"lifetime": "until the person exits ascend-agent or closes it with /tunnel close; Straiker reaches the app only while it is open",
+				"next": fmt.Sprintf("create the application on endpoint, its request_template carrying \"_broker_targets\": "+
+					"{%q: %q}; keepRunning, run on this machine, keeps the open apps reachable without the terminal "+
+					"(same broker key)", tu.Host, target),
 			}, false)
 		},
 	}
