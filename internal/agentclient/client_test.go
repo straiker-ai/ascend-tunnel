@@ -325,14 +325,18 @@ func TestHARsAreUploadedGzippedToTheSession(t *testing.T) {
 		fmt.Fprint(w, `{"traceId":"t1","trace":{"keptRequests":3,"totalRequests":9}}`)
 	})
 	app := "00000000-0000-7000-8000-000000000001"
-	tr, err := g.client().UploadHAR(context.Background(), "s1", app, "here it is", []byte(`{"log":{"entries":[]}}`))
+	tr, err := g.client().UploadHAR(context.Background(), "s1", app, "ignored.example", "here it is", []byte(`{"log":{"entries":[]}}`))
 	if err != nil || tr.TraceID != "t1" || tr.Trace.KeptRequests != 3 || string(got) != `{"log":{"entries":[]}}` {
 		t.Fatalf("%+v %v %q", tr, err, got)
 	}
-	if query.Get("appId") != app || query.Get("note") != "here it is" {
-		t.Fatalf("query %v", query)
+	if query.Get("appId") != app || query.Get("note") != "here it is" || query.Has("host") {
+		t.Fatalf("an application's HAR names the application, not a host: %v", query)
 	}
-	if _, err := g.client().UploadHAR(context.Background(), "s1", "", "", []byte(`{}`)); err != nil || len(query) != 0 {
+	if _, err := g.client().UploadHAR(context.Background(), "s1", "", "chat.acme.com", "", []byte(`{}`)); err != nil ||
+		query.Get("host") != "chat.acme.com" || query.Has("appId") {
+		t.Fatalf("before the application exists, the recorded page's host: %v %v", err, query)
+	}
+	if _, err := g.client().UploadHAR(context.Background(), "s1", "", "", "", []byte(`{}`)); err != nil || len(query) != 0 {
 		t.Fatalf("without an app or note: %v %v", err, query)
 	}
 }

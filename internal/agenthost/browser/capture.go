@@ -262,9 +262,13 @@ func (cp *Capture) loop(ctx context.Context, exited <-chan struct{}) {
 					}
 				}
 			default:
-				if id := cp.rec.handle(ev); id != "" {
+				body, stream := cp.rec.handle(ev)
+				if body != "" {
 					cp.bodies.Add(1)
-					go cp.fetchBody(ctx, ev.SessionID, id)
+					go cp.fetchBody(ctx, ev.SessionID, body)
+				}
+				if stream != "" {
+					go cp.follow(ctx, ev.SessionID, stream)
 				}
 			}
 		}
@@ -287,6 +291,23 @@ func (cp *Capture) fetchBody(ctx context.Context, session, id string) {
 		return
 	}
 	cp.rec.setBody(session, id, b.Body, b.Base64Encoded)
+}
+
+// follow asks Chrome for a stream's chunks as they arrive (Network.dataReceived carries them), with what it has
+// buffered so far. A Chrome without it leaves the stream unrecorded, as before.
+func (cp *Capture) follow(ctx context.Context, session, id string) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	raw, err := cp.c.call(ctx, session, "Network.streamResourceContent", map[string]any{"requestId": id})
+	if err != nil {
+		return
+	}
+	var b struct {
+		BufferedData string `json:"bufferedData"`
+	}
+	if json.Unmarshal(raw, &b) == nil {
+		cp.rec.streamStarted(session, id, b.BufferedData)
+	}
 }
 
 // Done is closed when the person closes the browser window.

@@ -89,6 +89,47 @@ func TestTheAskingAgentIsNamed(t *testing.T) {
 	}
 }
 
+func TestAConfirmationAsksYesOrNoAndIsNeverRemembered(t *testing.T) {
+	m := newChatModel(context.Background(), nil, chatConfig{org: "1"})
+	reply := make(chan approval, 1)
+	m.Update(approvalMsg{kind: askConfirm, agent: "ascend", text: `create the Ascend application "bot" for https://x.example/chat in org 1`, reply: reply})
+	if v := m.View(); !strings.Contains(v, `Allow Ascend Agent to create the Ascend application "bot"`) || !strings.Contains(v, "[y] yes   [n] no") || strings.Contains(v, "[a]") {
+		t.Fatalf("view: %q", v)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}) // no "always" for an action
+	if len(m.asks) != 1 {
+		t.Fatal("only y, n or Esc answer a confirmation")
+	}
+	m.input.SetValue("")
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	if got := <-reply; got != approveOnce || len(m.asks) != 0 {
+		t.Fatalf("y confirms: %v", got)
+	}
+}
+
+func TestASecretIsTypedUnseenAndGoesOnlyToTheTool(t *testing.T) {
+	m := newChatModel(context.Background(), nil, chatConfig{org: "1"})
+	reply := make(chan string, 1)
+	m.Update(approvalMsg{kind: askSecret, text: "API key for https://x.example/chat", secret: reply})
+	for _, r := range "sk-typed" {
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	if v := m.View(); strings.Contains(v, "sk-type") || m.input.Value() != "" || !strings.Contains(v, "7 characters, not shown") {
+		t.Fatalf("never shown, never in the input line: %q / %q", v, m.input.Value())
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := <-reply; got != "sk-type" || len(m.asks) != 0 || len(m.typed) != 0 {
+		t.Fatalf("Enter gives it to the tool and forgets it: %q", got)
+	}
+	m.Update(approvalMsg{kind: askSecret, text: "API key", secret: reply})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if got := <-reply; got != "" {
+		t.Fatalf("Esc cancels: %q", got)
+	}
+}
+
 func TestApprovalsAnswerWithOneKey(t *testing.T) {
 	m := newChatModel(context.Background(), nil, chatConfig{org: "1"})
 	reply := make(chan approval, 1)
@@ -162,5 +203,38 @@ func TestTheBannerFitsItsTerminal(t *testing.T) {
 	}
 	if narrow := banner(40, "agent dev"); strings.Contains(narrow, "\n") || !strings.Contains(narrow, "Ascend Agent") {
 		t.Fatalf("narrow: %q", narrow)
+	}
+}
+
+func TestCommandsActOnTheOneCurrentApplication(t *testing.T) {
+	m := newChatModel(context.Background(), nil, chatConfig{})
+	if _, why := m.current(); why != noCurrentApp {
+		t.Fatalf("no current app: %q", why)
+	}
+	if cmd := m.attachHAR("chat.har"); cmd == nil {
+		t.Fatal("/har with no current app says so")
+	}
+	a, b := "01a18679-dfcd-706a-bb99-571752e58e19", "01a1879c-40f5-7531-95fd-7de3a08ef7b4"
+	m.event(agentclient.Event{Type: "session.app", AppID: a, Name: "support-bot"})
+	if !strings.Contains(m.input.Prompt, "(support-bot)") {
+		t.Fatalf("the prompt shows the current app, like a git branch: %q", m.input.Prompt)
+	}
+	m.event(agentclient.Event{Type: "build.result", AppID: a, Status: "proposed", Cand: &agentclient.Candidate{Source: "A"}})
+	m.event(agentclient.Event{Type: "session.app", AppID: b, Name: "harbor"})
+	m.event(agentclient.Event{Type: "build.result", AppID: b, Status: "proposed", Cand: &agentclient.Candidate{Source: "B"}})
+	if c, _ := m.current(); c == nil || c.Source != "B" {
+		t.Fatalf("harbor is current: %v", c)
+	}
+	m.event(agentclient.Event{Type: "session.app", AppID: a, Name: "support-bot"})
+	if c, _ := m.current(); c == nil || c.Source != "A" {
+		t.Fatalf("back on support-bot, its own proposal, not the latest build's: %v", c)
+	}
+	m.event(agentclient.Event{Type: "build.result", AppID: a, Status: "failed"})
+	if c, why := m.current(); c != nil || !strings.Contains(why, "support-bot") {
+		t.Fatalf("a failed build leaves nothing to save for that app, and says which: %v %q", c, why)
+	}
+	m.event(agentclient.Event{Type: "session.app", AppID: b, Name: "harbor"})
+	if c, _ := m.current(); c == nil || c.Source != "B" {
+		t.Fatal("another app's proposal is untouched")
 	}
 }

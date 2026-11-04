@@ -177,6 +177,11 @@ func (f *fakePlatform) PlatformGet(ctx context.Context, path string, q url.Value
 	return json.Unmarshal([]byte(body), out)
 }
 
+func (f *fakePlatform) PlatformPost(ctx context.Context, path string, body, out any) error {
+	f.paths = append(f.paths, "POST "+path)
+	return json.Unmarshal([]byte(`{}`), out)
+}
+
 func TestAscendReadsAreFixedAndTrimmed(t *testing.T) {
 	pl := &fakePlatform{}
 	r := New(policy.Default(), Info{}, http.DefaultClient, nil, pl)

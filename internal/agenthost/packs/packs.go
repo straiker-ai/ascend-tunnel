@@ -22,6 +22,7 @@ type Info struct {
 	Version string
 	HostID  string
 	Org     string
+	Env     string
 	API     string
 }
 
@@ -58,6 +59,17 @@ func New(p *policy.Policy, info Info, client *http.Client, roots *x509.CertPool,
 	if pl, ok := ap.(Platform); ok && ap != nil {
 		for _, t := range ascendTools(pl) {
 			add(t)
+		}
+		if cf, ok := ap.(Confirmer); ok {
+			add(appCreate(pl, cf, info.Org))
+			if pt, ok := ap.(Patcher); ok {
+				add(appAdaptor(pl, pt, cf, info.Org))
+			}
+		}
+	}
+	if tn, ok := ap.(Tunneler); ok && ap != nil {
+		if cf, ok := ap.(Confirmer); ok {
+			add(tunnelOpen(p, cf, tn, info))
 		}
 	}
 	return r

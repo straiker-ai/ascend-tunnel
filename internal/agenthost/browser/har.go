@@ -47,8 +47,12 @@ type entry struct {
 	body     string
 	base64   bool
 	sse      strings.Builder
-	ws       []wsFrame
-	failed   string
+	// A fetch() that reads a stream (SSE or ndjson by hand, as Salesforce Messaging does) never ends, so its body
+	// cannot be fetched afterwards: its chunks are kept as they arrive (Network.streamResourceContent).
+	streaming bool
+	streamed  strings.Builder
+	ws        []wsFrame
+	failed    string
 }
 
 type wsFrame struct {
@@ -119,8 +123,8 @@ func wall(sec float64) time.Time {
 	return time.Unix(0, int64(sec*float64(time.Second))).UTC()
 }
 
-// handle records one Network event; it reports a requestId whose body is ready to fetch.
-func (r *recorder) handle(ev event) (bodyFor string) {
+// handle records one Network event; it reports a requestId whose body is ready to fetch, or whose stream to follow.
+func (r *recorder) handle(ev event) (bodyFor, streamFor string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	switch ev.Method {
@@ -138,7 +142,7 @@ func (r *recorder) handle(ev event) (bodyFor string) {
 			RedirectResponse *cdpResponse `json:"redirectResponse"`
 		}
 		if json.Unmarshal(ev.Params, &p) != nil {
-			return ""
+			return "", ""
 		}
 		if prev := r.get(ev.SessionID, p.RequestID); prev != nil && p.RedirectResponse != nil {
 			prev.response(*p.RedirectResponse)
@@ -175,6 +179,10 @@ func (r *recorder) handle(ev event) (bodyFor string) {
 				if p.Type != "" {
 					e.resType = strings.ToLower(p.Type)
 				}
+				if streamable(e.resMime) && e.resType != "eventsource" { // EventSource has its own event
+					e.streaming = true
+					return "", p.RequestID
+				}
 			}
 		}
 	case "Network.responseReceivedExtraInfo":
@@ -197,7 +205,7 @@ func (r *recorder) handle(ev event) (bodyFor string) {
 		}
 		if json.Unmarshal(ev.Params, &p) == nil {
 			if e := r.get(ev.SessionID, p.RequestID); e != nil && wantsBody(e) {
-				return p.RequestID
+				return p.RequestID, ""
 			}
 		}
 	case "Network.loadingFailed":
@@ -259,6 +267,16 @@ func (r *recorder) handle(ev event) (bodyFor string) {
 				e.ws = append(e.ws, wsFrame{Type: kind, Time: p.Timestamp, Opcode: p.Response.Opcode, Data: clip(p.Response.PayloadData)})
 			}
 		}
+	case "Network.dataReceived": // carries data only for a request whose stream is followed
+		var p struct {
+			RequestID string `json:"requestId"`
+			Data      string `json:"data"`
+		}
+		if json.Unmarshal(ev.Params, &p) == nil && p.Data != "" {
+			if e := r.get(ev.SessionID, p.RequestID); e != nil && e.streaming {
+				e.appendStream(p.Data)
+			}
+		}
 	case "Network.eventSourceMessageReceived":
 		var p struct {
 			RequestID string `json:"requestId"`
@@ -275,7 +293,7 @@ func (r *recorder) handle(ev event) (bodyFor string) {
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
 type cdpResponse struct {
@@ -283,6 +301,31 @@ type cdpResponse struct {
 	StatusText string     `json:"statusText"`
 	Headers    cdpHeaders `json:"headers"`
 	MimeType   string     `json:"mimeType"`
+}
+
+// streamStarted records what a followed stream had buffered before it was followed.
+func (r *recorder) streamStarted(session, id, buffered string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if e := r.get(session, id); e != nil && buffered != "" {
+		e.appendStream(buffered)
+	}
+}
+
+// appendStream adds one base64 chunk of a followed stream, up to the body cap.
+func (e *entry) appendStream(b64 string) {
+	if room := maxBodyBytes - e.streamed.Len(); room > 0 {
+		chunk := decodeBody(b64, true)
+		if len(chunk) > room {
+			chunk = chunk[:room]
+		}
+		e.streamed.WriteString(chunk)
+	}
+}
+
+func streamable(mime string) bool {
+	m := strings.ToLower(mime)
+	return strings.Contains(m, "event-stream") || strings.Contains(m, "ndjson")
 }
 
 func (e *entry) response(r cdpResponse) {
@@ -363,6 +406,9 @@ func (r *recorder) har(version string) ([]byte, Stats) {
 			req["postData"] = map[string]any{"mimeType": e.postMime, "text": redactBody(e.postData, e.postMime)}
 		}
 		text, mime := e.body, e.resMime
+		if text == "" && e.streamed.Len() > 0 {
+			text = e.streamed.String()
+		}
 		if e.sse.Len() > 0 {
 			text, mime = e.sse.String(), "text/event-stream"
 		}

@@ -251,7 +251,7 @@ func newHost(s *settings, id *identity.Identity, audit *agent.Audit, ap packs.Ap
 	if err != nil {
 		return nil, err
 	}
-	tools := packs.New(s.pol, packs.Info{Version: version, HostID: id.AgentID, Org: s.org, API: s.api},
+	tools := packs.New(s.pol, packs.Info{Version: version, HostID: id.AgentID, Org: s.org, Env: s.env, API: s.api},
 		&http.Client{Transport: netx.Transport(tc)}, tc.RootCAs, ap)
 	client := &stream.Client{
 		Base:    s.api,

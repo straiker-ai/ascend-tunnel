@@ -27,7 +27,7 @@ Straiker Ascend ──► Straiker relay ◄──── outbound HTTPS (WebSock
 | | |
 |---|---|
 | macOS | `brew install straiker-ai/tap/ascend-tunnel` (with [ascend-agent](docs/ascend-agent.md): `brew install straiker-ai/tap/ascend-tunnel straiker-ai/tap/ascend-agent`) |
-| Windows | the `.zip` from [Releases](../../releases) |
+| Windows | the `.zip` from [Releases](../../releases), then [`service install`](#running-it-as-a-service) |
 | Linux | the `.deb` / `.rpm` from [Releases](../../releases) (installs a systemd service), or the archive |
 | Docker | `docker run ghcr.io/straiker-ai/ascend-tunnel` (see [Running it as a service](#running-it-as-a-service)) |
 | Anything else | the archive for your platform from [Releases](../../releases) - one static binary |
@@ -316,10 +316,27 @@ platform:
   - Check: `sudo ascend-tunnel check -c /etc/straiker/agent.yaml --state-dir /var/lib/ascend-tunnel`
 - **Docker:** see [the same steps with Docker](#the-same-steps-with-docker). The image is distroless
   (no shell) and runs as uid 65532.
-- **Windows and macOS:** `ascend-tunnel --org 1234 --allow chat.corp.internal` in a terminal, or
-  under your usual service manager. Keep the machine awake for the length of an assessment.
-  - Key: printed when it starts, or `ascend-tunnel key`
-  - Check: `ascend-tunnel check --org 1234 --allow chat.corp.internal`, as the same user
+- **Windows:** from a terminal opened with **Run as administrator**:
+  `ascend-tunnel service install --org 1234 --allow chat.corp.internal`. It copies itself to
+  `%ProgramFiles%\Straiker\ascend-tunnel`, and installs the `AscendTunnel` service, which starts with
+  Windows and restarts if it stops. The service runs as its own account (`NT SERVICE\AscendTunnel`) and
+  uses this machine's key, the one `ascend-tunnel key` and ascend-agent show: install grants that account
+  access to the key's directory. It takes the proxy settings (`HTTPS_PROXY`, `NO_PROXY`) of the terminal you
+  install from, but refuses a proxy URL with a password.
+- **macOS:** `ascend-tunnel service install --org 1234 --allow chat.corp.internal`, without sudo. It
+  installs a LaunchAgent that runs as you, with your key, starts when you log in and restarts if it stops.
+  Keep the machine awake for the length of an assessment.
+- **Linux, without the package:** `ascend-tunnel service install --org 1234 --allow chat.corp.internal`
+  installs a systemd user service that runs as you, with your key. Add `loginctl enable-linger $USER` so it
+  starts at boot, not only when you log in.
+
+`service install` takes the same flags as `run` and checks them before installing anything. Run it again to
+change the allowlist: it replaces what was installed. It prints the agent key and each target's app URL.
+`ascend-tunnel service status` shows whether it runs; `ascend-tunnel service uninstall` removes it and keeps
+the key. Its log is `connections.jsonl` in the key's directory.
+
+- Key: `ascend-tunnel key` (for the Linux package: `journalctl -u ascend-tunnel | grep identity`)
+- Check: `ascend-tunnel check --org 1234 --allow chat.corp.internal`, as the same user
 
 ## Troubleshooting
 
